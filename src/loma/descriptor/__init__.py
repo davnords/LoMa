@@ -1,0 +1,1 @@
+from .dedode import DeDoDeDescriptor

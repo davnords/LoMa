@@ -1,0 +1,416 @@
+# Reference code from LightGlue: https://github.com/cvg/LightGlue/blob/main/lightglue/lightglue.py
+
+from dataclasses import dataclass
+import math
+from typing import Callable, List, Literal, Tuple
+import numpy as np
+from PIL import Image
+
+import torch
+import torch.nn.functional as F
+from torch import nn
+
+from loma.types import Model, Batch
+from loma.device import device
+from loma.descriptor.dedode import DeDoDeDescriptor
+from loma.detector.dad import DaD
+
+torch.backends.cudnn.deterministic = True
+
+def rotate_half(x: torch.Tensor) -> torch.Tensor:
+    x = x.unflatten(-1, (-1, 2))
+    x1, x2 = x.unbind(dim=-1)
+    return torch.stack((-x2, x1), dim=-1).flatten(start_dim=-2)
+
+def apply_cached_rotary_emb(freqs: torch.Tensor, t: torch.Tensor) -> torch.Tensor:
+    return (t * freqs[0]) + (rotate_half(t) * freqs[1])
+
+def to_pixel_coords(flow, h1, w1):
+    flow = (
+        torch.stack(
+            (
+                w1 * (flow[..., 0] + 1) / 2,
+                h1 * (flow[..., 1] + 1) / 2,
+            ),
+            axis=-1,
+        )
+    )
+    return flow
+
+class LearnableFourierPositionalEncoding(nn.Module):
+    def __init__(self, M: int, dim: int, F_dim: int = None, *, gamma: float, posenc_dist: Literal["normal", "reciprocal"]) -> None:
+        super().__init__()
+        F_dim = F_dim if F_dim is not None else dim
+        self.gamma = gamma
+        self.Wr = nn.Linear(M, F_dim // 2, bias=False)
+        assert posenc_dist == "normal"
+        nn.init.normal_(self.Wr.weight.data, mean=0, std=self.gamma**-2)
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        projected = self.Wr(x)
+        cosines, sines = torch.cos(projected), torch.sin(projected)
+        emb = torch.stack([cosines, sines], 0).unsqueeze(-3)
+        return emb.repeat_interleave(2, dim=-1)
+
+class FixedPosEnc(nn.Module):
+    def __init__(self, M: int, dim: int, F_dim: int = None, *, gamma: float, posenc_dist: Literal["normal", "reciprocal"]) -> None:
+        super().__init__()
+        F_dim = F_dim if F_dim is not None else dim
+        self.gamma = gamma
+        if posenc_dist == "normal":
+            freqs = torch.randn(F_dim // 2, M).to(device) * self.gamma**-2
+        elif posenc_dist == "reciprocal":
+            min_freq = 1e-0 # about ~1 Hz
+            assert 1/gamma > min_freq
+            max_freq = 1/gamma 
+            freqs = (torch.rand(F_dim // 2, M).to(device) * (math.log(max_freq)-math.log(min_freq)) + math.log(min_freq)).exp()
+        else:
+            raise ValueError(f"Positional encoding distribution {posenc_dist} not supported")
+        self.Wr = nn.Linear(M, F_dim // 2, bias=False)
+        with torch.no_grad():
+            self.Wr.weight.data = freqs
+        self.Wr.weight.requires_grad = False
+    
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        projected = self.Wr(x)
+        cosines, sines = torch.cos(projected), torch.sin(projected)
+        emb = torch.stack([cosines, sines], 0).unsqueeze(-3)
+        return emb.repeat_interleave(2, dim=-1)
+
+
+class SelfBlock(nn.Module):
+    def __init__(
+        self, embed_dim: int, num_heads: int, flash: bool = False, bias: bool = True
+    ) -> None:
+        super().__init__()
+        self.embed_dim = embed_dim
+        self.num_heads = num_heads
+        assert self.embed_dim % num_heads == 0
+        self.head_dim = self.embed_dim // num_heads
+        self.Wqkv = nn.Linear(embed_dim, 3 * embed_dim, bias=bias)
+        self.out_proj = nn.Linear(embed_dim, embed_dim, bias=bias)
+        self.ffn = nn.Sequential(
+            nn.Linear(2 * embed_dim, 2 * embed_dim),
+            nn.LayerNorm(2 * embed_dim, elementwise_affine=True),
+            nn.GELU(),
+            nn.Linear(2 * embed_dim, embed_dim),
+        )
+
+    def forward(self, x: torch.Tensor, encoding: torch.Tensor) -> torch.Tensor:
+        qkv = self.Wqkv(x)
+        qkv = qkv.unflatten(-1, (self.num_heads, -1, 3)).transpose(1, 2)
+        q, k, v = qkv[..., 0], qkv[..., 1], qkv[..., 2]
+        if encoding is not None:
+            q = apply_cached_rotary_emb(encoding, q)
+            k = apply_cached_rotary_emb(encoding, k)
+        context = F.scaled_dot_product_attention(q, k, v)
+        message = self.out_proj(context.transpose(1, 2).flatten(start_dim=-2))
+        return x + self.ffn(torch.cat([x, message], -1))
+
+
+class CrossBlock(nn.Module):
+    def __init__(
+        self, embed_dim: int, num_heads: int, flash: bool = False, bias: bool = True
+    ) -> None:
+        super().__init__()
+        self.heads = num_heads
+        dim_head = embed_dim // num_heads
+        self.scale = dim_head**-0.5
+        inner_dim = dim_head * num_heads
+        self.to_qk = nn.Linear(embed_dim, inner_dim, bias=bias)
+        self.to_v = nn.Linear(embed_dim, inner_dim, bias=bias)
+        self.to_out = nn.Linear(inner_dim, embed_dim, bias=bias)
+        self.ffn = nn.Sequential(
+            nn.Linear(2 * embed_dim, 2 * embed_dim),
+            nn.LayerNorm(2 * embed_dim, elementwise_affine=True),
+            nn.GELU(),
+            nn.Linear(2 * embed_dim, embed_dim),
+        )
+
+    def map_(self, func: Callable, x0: torch.Tensor, x1: torch.Tensor):
+        return func(x0), func(x1)
+
+    def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> List[torch.Tensor]:
+        qk0, qk1 = self.map_(self.to_qk, x0, x1)
+        v0, v1 = self.map_(self.to_v, x0, x1)
+        qk0, qk1, v0, v1 = map(
+            lambda t: t.unflatten(-1, (self.heads, -1)).transpose(1, 2),
+            (qk0, qk1, v0, v1),
+        )
+        m0 = F.scaled_dot_product_attention(qk0, qk1, v1)
+        m1 = F.scaled_dot_product_attention(qk1, qk0, v0)
+        m0, m1 = self.map_(lambda t: t.transpose(1, 2).flatten(start_dim=-2), m0, m1)
+        m0, m1 = self.map_(self.to_out, m0, m1)
+        x0 = x0 + self.ffn(torch.cat([x0, m0], -1))
+        x1 = x1 + self.ffn(torch.cat([x1, m1], -1))
+        return x0, x1
+
+class TransformerLayer(nn.Module):
+    def __init__(self, *args, **kwargs):
+        super().__init__()
+        self.self_attn = SelfBlock(*args, **kwargs)
+        self.cross_attn = CrossBlock(*args, **kwargs)
+
+    def forward(self, desc0, desc1, encoding0, encoding1):
+        desc0 = self.self_attn(desc0, encoding0)
+        desc1 = self.self_attn(desc1, encoding1)
+        return self.cross_attn(desc0, desc1)
+
+def log_double_softmax(
+    sim: torch.Tensor, z0: torch.Tensor, z1: torch.Tensor
+) -> torch.Tensor:
+    b, m, n = sim.shape
+    scores0 = F.log_softmax(sim, 2)
+    scores1 = F.log_softmax(sim.transpose(-1, -2).contiguous(), 2).transpose(-1, -2)
+    scores = sim.new_full((b, m + 1, n + 1), 0)
+    scores[:, :m, :n] = scores0 + scores1
+    scores[:, :-1, -1] = z0.squeeze(-1)
+    scores[:, -1, :-1] = z1.squeeze(-1)
+    return scores
+
+class MatchAssignment(nn.Module):
+    def __init__(self, dim: int) -> None:
+        super().__init__()
+        self.dim = dim
+        self.matchability = nn.Linear(dim, 1, bias=True)
+        self.final_proj = nn.Linear(dim, dim, bias=True)
+
+    def forward(self, desc0: torch.Tensor, desc1: torch.Tensor):
+        mdesc0, mdesc1 = self.final_proj(desc0), self.final_proj(desc1)
+        _, _, d = mdesc0.shape
+        mdesc0, mdesc1 = mdesc0 / d**0.25, mdesc1 / d**0.25
+        sim = torch.einsum("bmd,bnd->bmn", mdesc0, mdesc1)
+        z0 = self.matchability(desc0)
+        z1 = self.matchability(desc1)
+        scores = log_double_softmax(sim, z0, z1)
+        return scores, sim
+
+
+def filter_matches(scores: torch.Tensor, th: float):
+    max0, max1 = scores[:, :-1, :-1].max(2), scores[:, :-1, :-1].max(1)
+    m0, m1 = max0.indices, max1.indices
+    indices0 = torch.arange(m0.shape[1], device=m0.device)[None]
+    indices1 = torch.arange(m1.shape[1], device=m1.device)[None]
+    mutual0 = indices0 == m1.gather(1, m0)
+    mutual1 = indices1 == m0.gather(1, m1)
+    max0_exp = max0.values.exp()
+    zero = max0_exp.new_tensor(0)
+    mscores0 = torch.where(mutual0, max0_exp, zero)
+    mscores1 = torch.where(mutual1, mscores0.gather(1, m1), zero)
+    valid0 = mutual0 & (mscores0 > th)
+    valid1 = mutual1 & valid0.gather(1, m1)
+    m0 = torch.where(valid0, m0, -1)
+    m1 = torch.where(valid1, m1, -1)
+    return m0, m1, mscores0, mscores1
+
+
+class LoMa(Model):
+    @dataclass(frozen=True)
+    class Cfg:
+        input_dim: int = 256
+        embed_dim: int = 256
+        n_layers: int = 9
+        num_heads: int = 4
+        filter_threshold: float = 0.1
+        mp: bool = True
+        compile: bool = True
+        normalize_descriptions: bool = False
+        descriptor: Literal["dedode_b", "dedode_g"] = "dedode_b"
+        num_keypoints: int = 4096
+        # Positional encoding config
+        posenc_type: Literal["learnable", "fixed", "none"] = "learnable"
+        # basically the wavelength of the positional encoding
+        posenc_gamma: float = 1.0
+        # posenc
+        posenc_dist: Literal["normal", "reciprocal"] = "normal"
+
+    def __init__(self, cfg: Cfg | None = None) -> None:
+        super().__init__()
+        if cfg is None:
+            cfg = LoMa.Cfg()
+        self.cfg = cfg
+
+        if cfg.input_dim != cfg.embed_dim:
+            self.input_proj = nn.Linear(cfg.input_dim, cfg.embed_dim, bias=True)
+        else:
+            self.input_proj = nn.Identity()
+
+        head_dim = cfg.embed_dim // cfg.num_heads
+        if cfg.posenc_type == "learnable":
+            self.posenc = LearnableFourierPositionalEncoding(2, head_dim, head_dim, gamma=cfg.posenc_gamma, posenc_dist=cfg.posenc_dist)
+        elif cfg.posenc_type == "fixed":
+            self.posenc = FixedPosEnc(2, head_dim, head_dim, gamma=cfg.posenc_gamma, posenc_dist=cfg.posenc_dist)
+        elif cfg.posenc_type == "none":
+            self.posenc = None
+        else:
+            raise ValueError(f"Positional encoding type {cfg.posenc_type} not supported")
+
+        self.transformers = nn.ModuleList([TransformerLayer(cfg.embed_dim, cfg.num_heads) for _ in range(cfg.n_layers)])
+        self.log_assignment = nn.ModuleList(
+            [MatchAssignment(cfg.embed_dim) for _ in range(cfg.n_layers)]
+        )
+
+        self._detector = DaD().eval()        
+        for p in self._detector.parameters():
+            p.requires_grad = False
+
+        self._descriptor = DeDoDeDescriptor(DeDoDeDescriptor.Cfg(arch=cfg.descriptor, descriptor_dim=cfg.input_dim)).eval()
+        for p in self._descriptor.parameters():
+            p.requires_grad = False
+
+        self.to(device)
+        if cfg.compile:
+            self.compile()
+        self.num_layers_inference = cfg.n_layers # Change if you want a faster model
+
+    @torch.inference_mode()
+    def detect(self, batch: Batch, num_keypoints: int | None = None) -> dict:
+        """Detect keypoints using the frozen detector."""
+        if num_keypoints is None:
+            num_keypoints = self.cfg.num_keypoints
+        return self._detector.detect(batch, num_keypoints=num_keypoints)
+
+    @torch.inference_mode()
+    def describe(self, batch: Batch, keypoints: torch.Tensor) -> dict:
+        """Describe keypoints using the frozen descriptor."""
+        return self._descriptor.describe_keypoints(batch, keypoints)
+
+    def forward(
+        self,
+        batch: Batch | dict[str, torch.Tensor],
+        keypoints_A: torch.Tensor | None = None,
+        keypoints_B: torch.Tensor | None = None,
+        descriptors_A: torch.Tensor | None = None,
+        descriptors_B: torch.Tensor | None = None,
+    ) -> dict:
+        with torch.autocast(
+            enabled=self.cfg.mp, dtype=torch.bfloat16, device_type="cuda"
+        ):
+            if isinstance(batch, Batch):
+                assert keypoints_A is not None and keypoints_B is not None
+                assert descriptors_A is not None and descriptors_B is not None
+                return self._forward(
+                    keypoints_A, keypoints_B, descriptors_A, descriptors_B
+                )
+            else:
+                data0, data1 = batch["image0"], batch["image1"]
+                return self._forward(
+                    data0["keypoints"],
+                    data1["keypoints"],
+                    data0["descriptors"],
+                    data1["descriptors"],
+                )
+
+    def _forward(
+        self,
+        kpts0: torch.Tensor,
+        kpts1: torch.Tensor,
+        desc0: torch.Tensor,
+        desc1: torch.Tensor,
+    ) -> dict:
+        desc0 = desc0.detach().contiguous()
+        desc1 = desc1.detach().contiguous()
+        if self.cfg.normalize_descriptions:
+            desc0 = F.normalize(desc0, dim=-1)
+            desc1 = F.normalize(desc1, dim=-1)
+
+        if torch.is_autocast_enabled():
+            desc0 = desc0.half()
+            desc1 = desc1.half()
+
+        desc0 = self.input_proj(desc0)
+        desc1 = self.input_proj(desc1)
+
+        if self.posenc is not None:
+            encoding0 = self.posenc(kpts0)
+            encoding1 = self.posenc(kpts1)
+        else:
+            encoding0 = encoding1 = None
+
+        all_scores = []
+        # for i in range(self.cfg.n_layers):
+        for i in range(self.num_layers_inference):
+            desc0, desc1 = self.transformers[i](desc0, desc1, encoding0, encoding1)
+            scores, _ = self.log_assignment[i](desc0, desc1)
+            all_scores.append(scores)
+
+        return {
+            "scores": all_scores[-1],
+            "all_scores": all_scores,
+        }
+
+    @torch.inference_mode()
+    def detect_and_describe(
+        self, image: str | torch.Tensor, num_keypoints: int | None = None
+    ) -> Tuple[torch.Tensor, torch.Tensor, int, int]:
+        """Returns (keypoints, descriptions, H, W) where H, W are the original image dimensions."""
+        if num_keypoints is None:
+            num_keypoints = self.cfg.num_keypoints
+        if isinstance(image, str):
+            keypoints = self._detector.detect_from_path(image, num_keypoints=num_keypoints)["keypoints"]
+            descriptions = self._descriptor.describe_keypoints_from_path(image, keypoints)["descriptions"]
+            w, h = Image.open(image).size
+        else:
+            batch = {"image": image}
+            keypoints = self._detector.detect(batch, num_keypoints=num_keypoints)["keypoints"]
+            descriptions = self._descriptor.describe_keypoints(batch, keypoints)["descriptions"]
+            h, w = image.shape[-2:]
+        return keypoints, descriptions, h, w
+
+    @torch.inference_mode()
+    def match(
+        self,
+        image_A: str | torch.Tensor,
+        image_B: str | torch.Tensor,
+        filter_threshold: float | None = None,
+        num_keypoints: int | None = None,
+    ) -> Tuple[np.ndarray, np.ndarray]:
+        """Match keypoints between two images, returning pixel-coordinate matches.
+
+        Args:
+            image_A: Path to image A (str) or image tensor (B, C, H, W).
+            image_B: Path to image B (str) or image tensor (B, C, H, W).
+        Returns:
+            Tuple of (kptsA, kptsB) as numpy arrays of pixel coordinates.
+        """
+        keypoints_A, descriptors_A, h1, w1 = self.detect_and_describe(image_A, num_keypoints)
+        keypoints_B, descriptors_B, h2, w2 = self.detect_and_describe(image_B, num_keypoints)
+
+        if filter_threshold is None:
+            filter_threshold = self.cfg.filter_threshold
+
+        scores = self._forward(keypoints_A, keypoints_B, descriptors_A, descriptors_B)["scores"]
+        m0, _, _, _ = filter_matches(scores, filter_threshold)
+
+        valid = m0[0] > -1
+        matched_A = keypoints_A[0][torch.where(valid)[0]]
+        matched_B = keypoints_B[0][m0[0][valid]]
+
+        return to_pixel_coords(matched_A, h1, w1).cpu().numpy(), to_pixel_coords(matched_B, h2, w2).cpu().numpy()
+
+def create_model(name: Literal["loma_B128", "loma_B", "loma_L", "loma_G"]) -> LoMa:
+    if name == "loma_B128":
+        cfg = LoMa.Cfg(input_dim=128, descriptor="dedode_b")
+        weights = torch.hub.load_state_dict_from_url(
+            "https://github.com/davnords/storage/releases/download/loma/loma_B128.pth"
+        )
+    elif name == "loma_B":
+        cfg = LoMa.Cfg(embed_dim=256, num_heads=4, descriptor="dedode_g")
+        weights = torch.hub.load_state_dict_from_url(
+            "https://github.com/davnords/storage/releases/download/loma/loma_B.pt"
+        )
+    elif name == "loma_L":
+        cfg = LoMa.Cfg(embed_dim=512, num_heads=8, descriptor="dedode_g")
+        weights = torch.hub.load_state_dict_from_url(
+            "https://github.com/davnords/storage/releases/download/loma/loma_L.pth"
+        )
+    elif name == "loma_G":
+        cfg = LoMa.Cfg(embed_dim=1024, num_heads=16, descriptor="dedode_g")
+        weights = torch.hub.load_state_dict_from_url(
+            "https://github.com/davnords/storage/releases/download/loma/loma_G.pth"
+        )
+    else:
+        raise ValueError(f"Model {name} not supported")
+    model = LoMa(cfg)
+    model.load_state_dict(weights, strict=True)
+    return model

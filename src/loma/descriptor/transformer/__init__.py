@@ -1,0 +1,1 @@
+from .dinov2 import vit_large
