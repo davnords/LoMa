@@ -59,10 +59,11 @@ uv run eval.py --name loma_B --benchmark mega1500
 The results are similar to those reported in the paper. E.g., when we run the above command we get `Mega-1500: [56.0, 71.9, 83.7]`, which is similar to the results in the paper.
 
 ## Checklist
-- [x] Publish the inference code
-- [ ] Release a lightweight descriptor
-- [ ] Provide training code
-- [ ] Release HardMatch
+- [x] Publish the inference code.
+- [ ] Release a lightweight descriptor.
+- [ ] Integrate with [HLoc](https://github.com/cvg/Hierarchical-Localization?tab=readme-ov-file).
+- [ ] Provide training code.
+- [ ] Release HardMatch.
 
 ## License
 All our code except the matcher, which inherits its license from LightGlue, is MIT license. LightGlue has an [Apache-2.0](https://github.com/cvg/LightGlue/blob/main/LICENSE) license.
