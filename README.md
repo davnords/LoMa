@@ -56,10 +56,11 @@ To run a benchmark you need to install the optional dependencies by e.g. `uv syn
 uv run eval.py --name loma_B --benchmark mega1500
 ```
 ### Expected Results
-The results are similar to those reported in the paper. E.g., when we run the above command we get `Mega-1500: [55.7, 71.8, 83.6]`, which is similar to the results in the paper.
+The results are similar to those reported in the paper. E.g., when we run the above command we get `Mega-1500: [56.0, 71.9, 83.7]`, which is similar to the results in the paper.
 
 ## Checklist
 - [x] Publish the inference code
+- [ ] Release a lightweight descriptor
 - [ ] Provide training code
 - [ ] Release HardMatch
 

@@ -353,7 +353,7 @@ def pose_auc(errors, thresholds):
         last_index = np.searchsorted(errors, t)
         r = np.r_[recall[:last_index], recall[last_index - 1]]
         e = np.r_[errors[:last_index], t]
-        aucs.append(np.trapz(r, x=e) / t)  # type: ignore
+        aucs.append(np.trapezoid(r, x=e) / t)  # type: ignore
     return aucs
 
 
