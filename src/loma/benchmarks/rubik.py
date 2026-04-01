@@ -17,7 +17,7 @@ class RubikBenchmark:
     @dataclass(frozen=True)
     class Cfg:
         # Preprocess the data by following the instructions at https://github.com/thibautloiseau/RUBIK/tree/main
-        data_path: str = "/mimer/NOBACKUP/groups/alvis_cvl/datasets/nuScenes"  # Temporary path for convenience
+        data_path: str = "data/nuScenes"
         seed: int | None = None
         estimate_pose_method: Literal["essential", "fundamental"] = "essential"
 
