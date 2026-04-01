@@ -18,7 +18,7 @@ import torch.nn as nn
 import torch.utils.checkpoint
 from torch.nn.init import trunc_normal_
 
-from .layers import Mlp, PatchEmbed, SwiGLUFFNFused, MemEffAttention, NestedTensorBlock as Block
+from .layers import Mlp, PatchEmbed, SwiGLUFFNFused, Block, Attention
 
 
 
@@ -311,7 +311,7 @@ def vit_small(patch_size=16, **kwargs):
         depth=12,
         num_heads=6,
         mlp_ratio=4,
-        block_fn=partial(Block, attn_class=MemEffAttention),
+        block_fn=partial(Block, attn_class=Attention),
         **kwargs,
     )
     return model
@@ -324,7 +324,7 @@ def vit_base(patch_size=16, **kwargs):
         depth=12,
         num_heads=12,
         mlp_ratio=4,
-        block_fn=partial(Block, attn_class=MemEffAttention),
+        block_fn=partial(Block, attn_class=Attention),
         **kwargs,
     )
     return model
@@ -337,7 +337,7 @@ def vit_large(patch_size=16, **kwargs):
         depth=24,
         num_heads=16,
         mlp_ratio=4,
-        block_fn=partial(Block, attn_class=MemEffAttention),
+        block_fn=partial(Block, attn_class=Attention),
         **kwargs,
     )
     return model
@@ -353,7 +353,7 @@ def vit_giant2(patch_size=16, **kwargs):
         depth=40,
         num_heads=24,
         mlp_ratio=4,
-        block_fn=partial(Block, attn_class=MemEffAttention),
+        block_fn=partial(Block, attn_class=Attention),
         **kwargs,
     )
     return model
