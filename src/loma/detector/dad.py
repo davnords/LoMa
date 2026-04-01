@@ -129,6 +129,7 @@ class DaD(Model):
         self, batch, *, num_keypoints, return_dense_probs=False
     ) -> dict[str, torch.Tensor]:
         self.train(False)
+        # TODO: using __call__ here gives me compile errors //je
         scoremap = self.forward(batch)["scoremap"]
         B, K, H, W = scoremap.shape
         if self.is_sigmoid:

@@ -31,8 +31,6 @@ class DeDoDeDescriptor(Model):
             encoder, decoder = dedode_descriptor_B(descriptor_dim=cfg.descriptor_dim, hidden_blocks=cfg.hidden_blocks)
         elif cfg.arch == "dedode_g":
             encoder, decoder = dedode_descriptor_G(descriptor_dim=cfg.descriptor_dim, hidden_blocks=cfg.hidden_blocks)
-        elif cfg.arch == "dedode_dinov3":
-            encoder, decoder = dedode_descriptor_dinov3(descriptor_dim=cfg.descriptor_dim, hidden_blocks=cfg.hidden_blocks)
         else:
             raise ValueError(f"Architecture {cfg.arch} not supported")
         self.cfg = cfg
@@ -421,59 +419,5 @@ def dedode_descriptor_G(descriptor_dim: int, dinov2_weights: str | None = None, 
     vgg_kwargs = dict(size = "19", amp = amp, amp_dtype = amp_dtype)
     dinov2_kwargs = dict(amp = amp, amp_dtype = amp_dtype, dinov2_weights = dinov2_weights)
     encoder = VGG_DINOv2(vgg_kwargs = vgg_kwargs, dinov2_kwargs = dinov2_kwargs)
-    decoder = Decoder(conv_refiner, descriptor_dim=descriptor_dim)
-    return encoder, decoder
-
-
-def dedode_descriptor_dinov3(descriptor_dim: int, dinov3_weights_path: str | None = None, hidden_blocks: int = 5):
-    amp_dtype = torch.bfloat16
-    amp = True
-    conv_refiner = nn.ModuleDict(
-        {
-            "16": ConvRefiner(
-                1024,
-                768,
-                512 + descriptor_dim,
-                hidden_blocks=hidden_blocks,
-                amp=amp,
-                amp_dtype=amp_dtype,
-            ),
-            "8": ConvRefiner(
-                512 + 512,
-                512,
-                256 + descriptor_dim,
-                hidden_blocks=hidden_blocks,
-                amp=amp,
-                amp_dtype=amp_dtype,
-            ),
-            "4": ConvRefiner(
-                256 + 256,
-                256,
-                128 + descriptor_dim,
-                hidden_blocks=hidden_blocks,
-                amp=amp,
-                amp_dtype=amp_dtype,
-            ),
-            "2": ConvRefiner(
-                128 + 128,
-                64,
-                32 + descriptor_dim,
-                hidden_blocks=hidden_blocks,
-                amp=amp,
-                amp_dtype=amp_dtype,
-            ),
-            "1": ConvRefiner(
-                64 + 32,
-                32,
-                1 + descriptor_dim,
-                hidden_blocks=hidden_blocks,
-                amp=amp,
-                amp_dtype=amp_dtype,
-            ),
-        }
-    )
-    vgg_kwargs = dict(size="19", amp=amp, amp_dtype=amp_dtype)
-    dinov3_kwargs = dict(amp=amp, amp_dtype=amp_dtype)
-    encoder = VGG_DINOv3(vgg_kwargs=vgg_kwargs, dinov3_kwargs=dinov3_kwargs)
     decoder = Decoder(conv_refiner, descriptor_dim=descriptor_dim)
     return encoder, decoder

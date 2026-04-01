@@ -4,14 +4,13 @@ from typing import Any, Callable
 import torch
 from einops import rearrange
 from torch import nn
-from functools import partial
 import torchvision.models as models
 from torch.nn import functional as F
 from torch import Tensor
 
-from loma.types import Normalizer, DescriptorName, FineFeaturesType
+from loma.types import Normalizer, FineFeaturesType
 from loma.device import device
-from loma.normalizers import imagenet, inception
+from loma.normalizers import imagenet
 
 def swish(x: Tensor) -> Tensor:
     return x * torch.sigmoid(x)
@@ -77,66 +76,6 @@ def wrap_model(
         normalize_feats=normalize_feats,
     )
     return model
-
-
-def _get_layers(layers, model):
-    return [b if b > 0 else len(model.blocks) + b for b in layers]
-
-
-class Descriptor:
-    @dataclass(frozen=True)
-    class Cfg:
-        name: DescriptorName = "dinov3_vitl16"
-        enable_amp: bool = True
-        frozen: bool = True
-        normalize_feats: bool = False
-        layer_idx: list[int] = field(
-            default_factory=lambda: [11, 17]
-        )  # [4, 11, 17, 23] for dinov3 style
-        weights_path: str | None = "dinov3_vitl16_pretrain_lvd1689m-08c60483.pth"
-
-    def __new__(cls, cfg: Cfg) -> nn.Module:
-        partial_wrap = partial(
-            wrap_model,
-            enable_amp=cfg.enable_amp,
-            frozen=cfg.frozen,
-            normalize_feats=cfg.normalize_feats,
-        )
-        match cfg.name:
-            case "dinov3_vitl16":
-                normalizer = imagenet
-                dinov3_vitl16: nn.Module = torch.hub.load(
-                    repo_or_dir="facebookresearch/dinov3:adc254450203739c8149213a7a69d8d905b4fcfa",
-                    model="dinov3_vitl16",
-                    pretrained=cfg.weights_path is not None,
-                    weights=cfg.weights_path,
-                    skip_validation=True,
-                ).to(device)
-                layers = _get_layers(cfg.layer_idx, dinov3_vitl16)
-                return partial_wrap(
-                    dinov3_vitl16,
-                    normalizer=normalizer,
-                    patch_size=16,
-                    func=partial(dinov3_vitl16.get_intermediate_layers, n=layers),
-                )
-            case "dinov2_vitl14":
-                normalizer = imagenet
-
-                dinov2_vit14: nn.Module = torch.hub.load(
-                    "facebookresearch/dinov2", "dinov2_vitl14"
-                ).to(device)
-                dinov2_vit14.mask_token = None
-                layers = _get_layers(cfg.layer_idx, dinov2_vit14)
-                return partial_wrap(
-                    dinov2_vit14,
-                    normalizer=normalizer,
-                    patch_size=14,
-                    func=partial(dinov2_vit14.get_intermediate_layers, n=layers),
-                )
-
-            case _:
-                raise ValueError(f"Unknown descriptor name: {cfg.name}")
-
 
 class VGG(nn.Module):
     def forward(self, x):

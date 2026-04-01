@@ -261,6 +261,8 @@ class LoMa(Model):
         self.to(device)
         if cfg.compile:
             self.compile()
+            self._detector.compile()
+            self._descriptor.compile()
         self.num_layers_inference = cfg.n_layers # Change if you want a faster model
 
     @torch.inference_mode()
