@@ -12,17 +12,10 @@ import logging
 
 from torch import Tensor
 from torch import nn
+import torch.nn.functional as F
 
 
 logger = logging.getLogger("dinov2")
-
-
-try:
-    from xformers.ops import memory_efficient_attention, unbind, fmha
-
-    XFORMERS_AVAILABLE = True
-except ImportError:
-    XFORMERS_AVAILABLE = False
 
 
 class Attention(nn.Module):
@@ -48,33 +41,15 @@ class Attention(nn.Module):
     def forward(self, x: Tensor) -> Tensor:
         B, N, C = x.shape
         qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads).permute(2, 0, 3, 1, 4)
-
-        q, k, v = qkv[0] * self.scale, qkv[1], qkv[2]
-        attn = q @ k.transpose(-2, -1)
-
-        attn = attn.softmax(dim=-1)
-        attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B, N, C)
-        x = self.proj(x)
-        x = self.proj_drop(x)
-        return x
-
-
-class MemEffAttention(Attention):
-    def forward(self, x: Tensor, attn_bias=None) -> Tensor:
-        if not XFORMERS_AVAILABLE:
-            assert attn_bias is None, "xFormers is required for nested tensors usage"
-            return super().forward(x)
-
-        B, N, C = x.shape
-        qkv = self.qkv(x).reshape(B, N, 3, self.num_heads, C // self.num_heads)
-
-        q, k, v = unbind(qkv, 2)
-
-        x = memory_efficient_attention(q, k, v, attn_bias=attn_bias)
-        x = x.reshape([B, N, C])
-
+        # q, k, v = qkv[0] * self.scale, qkv[1], qkv[2]
+        # attn = q @ k.transpose(-2, -1)
+        # attn = attn.softmax(dim=-1)
+        # attn = self.attn_drop(attn)
+        # x = attn @ v
+        # x = x.transpose(1, 2).reshape(B, N, C)
+        # almost same //je
+        x = F.scaled_dot_product_attention(qkv[0], qkv[1], qkv[2])
+        x = x.permute(0, 2, 1, 3).reshape(B, N, C)
         x = self.proj(x)
         x = self.proj_drop(x)
         return x
