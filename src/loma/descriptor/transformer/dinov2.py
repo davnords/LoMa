@@ -15,10 +15,9 @@ from typing import Sequence, Tuple, Union, Callable
 
 import torch
 import torch.nn as nn
-import torch.utils.checkpoint
 from torch.nn.init import trunc_normal_
 
-from .layers import Mlp, PatchEmbed, SwiGLUFFNFused, Block, Attention
+from .layers import Mlp, PatchEmbed, Block, Attention
 
 
 
@@ -106,8 +105,6 @@ class DinoVisionTransformer(nn.Module):
 
         if ffn_layer == "mlp":
             ffn_layer = Mlp
-        elif ffn_layer == "swiglufused" or ffn_layer == "swiglu":
-            ffn_layer = SwiGLUFFNFused
         elif ffn_layer == "identity":
 
             def f(*args, **kwargs):
