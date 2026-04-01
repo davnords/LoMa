@@ -3,5 +3,4 @@ __pycache__/
 .venv
 *.pt
 wandb/
-uv.lock
 data/
