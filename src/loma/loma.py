@@ -205,7 +205,7 @@ def filter_matches(scores: torch.Tensor, th: float):
 
 
 class LoMa(Model):
-    @dataclass(frozen=True)
+    @dataclass(frozen=True, kw_only=True)
     class Cfg:
         input_dim: int = 256
         embed_dim: int = 256
