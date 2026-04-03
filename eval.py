@@ -1,6 +1,7 @@
 from typing import Literal
 import tyro
 import os
+import torch
 
 from loma.loma import create_model
 from loma.random import set_seed
@@ -10,6 +11,8 @@ from loma.benchmarks import (
     RubikBenchmark,
     WxBSBenchmark,
 )
+
+torch.backends.cudnn.deterministic = True
 
 def main(
     name: Literal[        

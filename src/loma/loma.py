@@ -13,7 +13,7 @@ from loma.device import device, amp_dtype
 from loma.descriptor.dedode import DeDoDeDescriptor
 from loma.detector.dad import DaD
 
-torch.backends.cudnn.deterministic = True # Set this to False for maximum throughput, but results may vary between runs.
+torch.backends.cudnn.deterministic = False # This is default set to False to speed up inference, for reproducibility one can override this setting.
 torch.set_float32_matmul_precision('high')
 
 # Reference code from LightGlue: https://github.com/cvg/LightGlue/blob/main/lightglue/lightglue.py
