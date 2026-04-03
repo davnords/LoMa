@@ -12,8 +12,6 @@ from loma.benchmarks import (
     WxBSBenchmark,
 )
 
-torch.backends.cudnn.deterministic = True
-
 def main(
     name: Literal[        
         "loma_B128",
