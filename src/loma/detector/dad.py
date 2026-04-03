@@ -11,7 +11,7 @@ import torchvision.transforms as transforms
 from PIL import Image
 from loma.io import check_not_i16
 from loma.types import Batch, Model
-from loma.device import device
+from loma.device import device, amp_dtype
 from loma.detector.utils import sample_keypoints
 import logging
 
@@ -258,7 +258,7 @@ class ConvRefiner(nn.Module):
         hidden_blocks=5,
         amp=True,
         residual=False,
-        amp_dtype=torch.bfloat16,
+        amp_dtype=amp_dtype,
     ):
         super().__init__()
         self.block1 = self.create_block(
@@ -330,7 +330,7 @@ class ConvRefiner(nn.Module):
 
 
 class VGG19(nn.Module):
-    def __init__(self, amp=False, amp_dtype=torch.bfloat16) -> None:
+    def __init__(self, amp=False) -> None:
         super().__init__()
         self.layers = nn.ModuleList(tvm.vgg19_bn().features[:40])
         # Maxpool layers: 6, 13, 26, 39
@@ -352,7 +352,7 @@ class VGG19(nn.Module):
 
 
 class VGG(nn.Module):
-    def __init__(self, size="19", amp=False, amp_dtype=torch.bfloat16) -> None:
+    def __init__(self, size="19", amp=False, amp_dtype=amp_dtype) -> None:
         super().__init__()
         if size == "11":
             self.layers = nn.ModuleList(tvm.vgg11_bn().features[:22])
@@ -382,7 +382,6 @@ class VGG(nn.Module):
 def dedode_detector_S():
     residual = True
     hidden_blocks = 3
-    amp_dtype = torch.bfloat16
     amp = True
     NUM_PROTOTYPES = 1
     conv_refiner = nn.ModuleDict(

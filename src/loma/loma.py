@@ -1,5 +1,3 @@
-# Reference code from LightGlue: https://github.com/cvg/LightGlue/blob/main/lightglue/lightglue.py
-
 from dataclasses import dataclass
 import math
 from typing import Callable, List, Literal, Tuple
@@ -11,12 +9,14 @@ import torch.nn.functional as F
 from torch import nn
 
 from loma.types import Model, Batch
-from loma.device import device
+from loma.device import device, amp_dtype
 from loma.descriptor.dedode import DeDoDeDescriptor
 from loma.detector.dad import DaD
 
-torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.deterministic = True # Set this to False for maximum throughput, but results may vary between runs.
+torch.set_float32_matmul_precision('high')
 
+# Reference code from LightGlue: https://github.com/cvg/LightGlue/blob/main/lightglue/lightglue.py
 def rotate_half(x: torch.Tensor) -> torch.Tensor:
     x = x.unflatten(-1, (-1, 2))
     x1, x2 = x.unbind(dim=-1)
@@ -180,23 +180,26 @@ class MatchAssignment(nn.Module):
         _, _, d = mdesc0.shape
         mdesc0, mdesc1 = mdesc0 / d**0.25, mdesc1 / d**0.25
         sim = torch.einsum("bmd,bnd->bmn", mdesc0, mdesc1)
-        z0 = self.matchability(desc0)
-        z1 = self.matchability(desc1)
-        scores = log_double_softmax(sim, z0, z1)
+        # For training we supervise matchability but for inference we don't use it
+        # NOTE: This operation, double softmax, takes a lot of current inference time.
+        if self.training:
+            z0 = self.matchability(desc0)
+            z1 = self.matchability(desc1)
+            scores = log_double_softmax(sim, z0, z1)
+        else:
+            scores = F.softmax(sim, dim=2) * F.softmax(sim, dim=1)
         return scores, sim
 
 
 def filter_matches(scores: torch.Tensor, th: float):
-    max0, max1 = scores[:, :-1, :-1].max(2), scores[:, :-1, :-1].max(1)
+    max0, max1 = scores.max(2), scores.max(1)
     m0, m1 = max0.indices, max1.indices
     indices0 = torch.arange(m0.shape[1], device=m0.device)[None]
     indices1 = torch.arange(m1.shape[1], device=m1.device)[None]
     mutual0 = indices0 == m1.gather(1, m0)
     mutual1 = indices1 == m0.gather(1, m1)
-    max0_exp = max0.values.exp()
-    zero = max0_exp.new_tensor(0)
-    mscores0 = torch.where(mutual0, max0_exp, zero)
-    mscores1 = torch.where(mutual1, mscores0.gather(1, m1), zero)
+    mscores0 = torch.where(mutual0, max0.values, max0.values.new_tensor(0))
+    mscores1 = torch.where(mutual1, mscores0.gather(1, m1), mscores0.new_tensor(0))
     valid0 = mutual0 & (mscores0 > th)
     valid1 = mutual1 & valid0.gather(1, m1)
     m0 = torch.where(valid0, m0, -1)
@@ -259,6 +262,7 @@ class LoMa(Model):
             p.requires_grad = False
 
         self.to(device)
+        self.eval()
         if cfg.compile:
             self.compile()
             self._detector.compile()
@@ -286,7 +290,7 @@ class LoMa(Model):
         descriptors_B: torch.Tensor | None = None,
     ) -> dict:
         with torch.autocast(
-            enabled=self.cfg.mp, dtype=torch.bfloat16, device_type="cuda"
+            enabled=self.cfg.mp, dtype=amp_dtype, device_type="cuda"
         ):
             if isinstance(batch, Batch):
                 assert keypoints_A is not None and keypoints_B is not None
@@ -330,11 +334,12 @@ class LoMa(Model):
             encoding0 = encoding1 = None
 
         all_scores = []
-        # for i in range(self.cfg.n_layers):
         for i in range(self.num_layers_inference):
             desc0, desc1 = self.transformers[i](desc0, desc1, encoding0, encoding1)
-            scores, _ = self.log_assignment[i](desc0, desc1)
-            all_scores.append(scores)
+            # Only compute intermediate matches during training (as the loss is applied layer-wise)
+            if self.training or i == self.num_layers_inference - 1: 
+                scores, _ = self.log_assignment[i](desc0, desc1)
+                all_scores.append(scores)
 
         return {
             "scores": all_scores[-1],
@@ -381,7 +386,8 @@ class LoMa(Model):
         if filter_threshold is None:
             filter_threshold = self.cfg.filter_threshold
 
-        scores = self._forward(keypoints_A, keypoints_B, descriptors_A, descriptors_B)["scores"]
+        batch = {"image0": {"keypoints": keypoints_A, "descriptors": descriptors_A}, "image1": {"keypoints": keypoints_B, "descriptors": descriptors_B}}
+        scores = self(batch)["scores"]
         m0, _, _, _ = filter_matches(scores, filter_threshold)
 
         valid = m0[0] > -1

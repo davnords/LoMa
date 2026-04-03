@@ -6,9 +6,11 @@ from torch.nn.parallel import DistributedDataParallel
 import torch.nn.functional as F
 
 from loma.geometry import compute_sparse_mnn_matches
-from loma.glue.lightglue import LightGlue
+from loma.loma import LoMa
 from loma.types import Batch
 
+# NOTE: We include the loss function to provide some further information...
+# ...it is not used in the inference release
 class GlueLoss(nn.Module):
     @dataclass(frozen=True)
     class Cfg:
@@ -24,8 +26,8 @@ class GlueLoss(nn.Module):
         super().__init__()
         self.cfg = cfg
 
-    def forward(self, batch: Batch, model: LightGlue | DistributedDataParallel, step: int):
-        module: LightGlue = model.module if isinstance(model, DistributedDataParallel) else model
+    def forward(self, batch: Batch, model: LoMa | DistributedDataParallel, step: int):
+        module: LoMa = model.module if isinstance(model, DistributedDataParallel) else model
         # Detect keypoints using model's frozen detector
         detector_kpts_A, detector_kpts_B = (
             module.detect(batch, num_keypoints=self.cfg.num_keypoints)["keypoints"]

@@ -10,7 +10,7 @@ import torchvision.models as tvm
 import torchvision.transforms as transforms
 from PIL import Image
 
-from loma.device import device
+from loma.device import device, amp_dtype
 from loma.types import Batch, Model
 
 logger = logging.getLogger(__name__)
@@ -219,7 +219,7 @@ class ConvRefiner(nn.Module):
             return x
 
 class VGG(nn.Module):
-    def __init__(self, size="19", amp=False, amp_dtype=torch.bfloat16) -> None:
+    def __init__(self, size="19", amp=False, amp_dtype=amp_dtype) -> None:
         super().__init__()
         if size == "11":
             self.layers = nn.ModuleList(tvm.vgg11_bn().features[:22])
@@ -247,7 +247,7 @@ class VGG(nn.Module):
 
 
 class FrozenDINOv2(nn.Module):
-    def __init__(self, amp = True, amp_dtype = torch.bfloat16, dinov2_weights = None):
+    def __init__(self, amp = True, amp_dtype = amp_dtype, dinov2_weights = None):
         super().__init__()
         if dinov2_weights is None:
             dinov2_weights = torch.hub.load_state_dict_from_url("https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_pretrain.pth", map_location="cpu")
@@ -324,7 +324,6 @@ class VGG_DINOv3(nn.Module):
         return feats_vgg + feat_dinov3, sizes_vgg + size_dinov3
 
 def dedode_descriptor_B(descriptor_dim: int, hidden_blocks: int = 5):
-    amp_dtype = torch.bfloat16
     amp = True
     conv_refiner = nn.ModuleDict(
         {
@@ -369,7 +368,6 @@ def dedode_descriptor_B(descriptor_dim: int, hidden_blocks: int = 5):
 
 
 def dedode_descriptor_G(descriptor_dim: int, dinov2_weights: str | None = None, hidden_blocks: int = 5):
-    amp_dtype = torch.bfloat16
     amp = True
 
     conv_refiner = nn.ModuleDict(

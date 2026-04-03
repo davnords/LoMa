@@ -9,7 +9,6 @@ from loma.loma import LoMa
 
 logger = logging.getLogger(__name__)
 
-
 class ScanNet1500:
     def __init__(self, data_root="data/scannet/scans") -> None:
         self.data_root = data_root

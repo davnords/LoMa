@@ -1,5 +1,4 @@
-from dataclasses import dataclass, field
-import math
+from dataclasses import dataclass
 from typing import Any, Callable
 import torch
 from einops import rearrange
@@ -9,12 +8,11 @@ from torch.nn import functional as F
 from torch import Tensor
 
 from loma.types import Normalizer, FineFeaturesType
-from loma.device import device
+from loma.device import device, amp_dtype
 from loma.normalizers import imagenet
 
 def swish(x: Tensor) -> Tensor:
     return x * torch.sigmoid(x)
-
 
 def wrap_with_normalize(
     forward: Callable[[torch.Tensor], list[torch.Tensor]],
@@ -27,7 +25,7 @@ def wrap_with_normalize(
 ):
     def wrapped_forward(self, img: torch.Tensor) -> list[torch.Tensor]:
         with (
-            torch.autocast(device.type, torch.bfloat16, enabled=enable_amp),
+            torch.autocast(device.type, amp_dtype, enabled=enable_amp),
             torch.set_grad_enabled(not frozen),
         ):
             if self.training and frozen:
@@ -62,7 +60,7 @@ def wrap_model(
     func: Any,
 ):
     if enable_amp and frozen:  # if training we want params in fp32
-        model = model.to(torch.bfloat16)
+        model = model.to(amp_dtype)
     if frozen:
         for param in model.parameters():
             param.requires_grad = False
@@ -80,7 +78,7 @@ def wrap_model(
 class VGG(nn.Module):
     def forward(self, x):
         x = imagenet(x)
-        with torch.autocast(device_type="cuda", enabled=True, dtype=torch.bfloat16):
+        with torch.autocast(device_type="cuda", enabled=True, dtype=amp_dtype):
             feats = {}
             scale = 1
             for layer in self.layers:

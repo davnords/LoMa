@@ -1,10 +1,13 @@
 from time import perf_counter
-from loma import LoMa, device
+from loma import LoMa
 import torch
 from PIL import Image
 import numpy as np
 
 def test_throughput():
+    # speeds things up a little bit
+    torch.backends.cudnn.deterministic = False
+    
     device = torch.device("cuda")
     model = LoMa(LoMa.Cfg(compile=True)).to(device)
     im_A = Image.open("assets/toronto_A.jpg").resize((560, 560))
@@ -15,10 +18,12 @@ def test_throughput():
     for i in range(10):
         model.match(im_A, im_B)
     # measure throughput
+    torch.cuda.synchronize()
     start_time = perf_counter()
     T = 20
     for i in range(T):
         model.match(im_A, im_B)
+    torch.cuda.synchronize()
     end_time = perf_counter()
     print(f"Throughput: {T / (end_time - start_time)} fps")
 
