@@ -11,8 +11,9 @@ from loma.benchmarks import (
     WxBSBenchmark,
 )
 
+
 def main(
-    name: Literal[        
+    name: Literal[
         "loma_B128",
         "loma_B",
         "loma_L",
@@ -49,7 +50,9 @@ def main(
     os.makedirs("results", exist_ok=True)
     with open(f"results/{name}_{benchmark}.json", "w") as f:
         import json
+
         json.dump(res, f, indent=4)
+
 
 if __name__ == "__main__":
     tyro.cli(main)

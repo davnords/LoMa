@@ -10,6 +10,6 @@ explanation = dynamo.explain(model)(
     torch.randn(1, 2048, 2).to(device),
     torch.randn(1, 2048, 2).to(device),
     torch.randn(1, 2048, 256).to(device),
-    torch.randn(1, 2048, 256).to(device)
+    torch.randn(1, 2048, 256).to(device),
 )
 print(explanation)

@@ -8,8 +8,10 @@ from loma.types import FineFeaturesType
 from loma.device import device, amp_dtype
 from loma.normalizers import imagenet
 
+
 def swish(x: Tensor) -> Tensor:
     return x * torch.sigmoid(x)
+
 
 class VGG(nn.Module):
     def forward(self, x):
@@ -49,6 +51,7 @@ class VGG19BN(VGG):
                 :last_layer
             ]
         )
+
 
 class FineFeatures(nn.Module):
     @dataclass(frozen=True)

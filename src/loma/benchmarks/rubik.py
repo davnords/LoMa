@@ -12,6 +12,7 @@ from loma.geometry import pose_auc
 from loma.random import set_seed
 from loma.loma import LoMa
 
+
 # Reference code: https://github.com/thibautloiseau/RUBIK/blob/main/eval.py
 class RubikBenchmark:
     @dataclass(frozen=True)

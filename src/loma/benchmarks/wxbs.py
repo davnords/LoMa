@@ -9,6 +9,7 @@ from wxbs_benchmark.evaluation import evaluate_Fs
 
 from loma.loma import LoMa
 
+
 class WxBSBenchmark:
     @dataclass(frozen=True)
     class Cfg:
@@ -16,7 +17,7 @@ class WxBSBenchmark:
         dataset_path: str = "data/WxBS"
         download: bool = True
 
-    def __init__(self, cfg: Cfg | None = None) -> None  :
+    def __init__(self, cfg: Cfg | None = None) -> None:
         if cfg is None:
             cfg = WxBSBenchmark.Cfg()
         self.subset = cfg.subset
@@ -41,31 +42,27 @@ class WxBSBenchmark:
         )
 
     def benchmark(
-            self, 
-            model: LoMa,
-        ):
+        self,
+        model: LoMa,
+    ):
         Fs = []
         for pair_dict in tqdm(self.dataset):
             kpts1, kpts2 = model.match(pair_dict["imgfname1"], pair_dict["imgfname2"])
 
             try:
-                F, _ = cv2.findFundamentalMat(kpts1, kpts2, cv2.USAC_MAGSAC, 0.25, 0.999, 100000)
+                F, _ = cv2.findFundamentalMat(
+                    kpts1, kpts2, cv2.USAC_MAGSAC, 0.25, 0.999, 100000
+                )
             except Exception:
-                F = np.array([[0.0, 0.0, 0.0],
-                        [0.0, 0.0, -1.0],
-                        [0.0, 1.0, 0.0]])
+                F = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
 
             if F is None:
-                F = np.array([[0.0, 0.0, 0.0],
-                        [0.0, 0.0, -1.0],
-                        [0.0, 1.0, 0.0]])
+                F = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
             Fs.append(F)
 
-        result_dict, thresholds = evaluate_Fs(
-            Fs, self.subset
-        )
+        result_dict, thresholds = evaluate_Fs(Fs, self.subset)
 
-        avg_pck = result_dict["average"] 
+        avg_pck = result_dict["average"]
         mAA_10px = avg_pck[:11].mean()
 
         return {

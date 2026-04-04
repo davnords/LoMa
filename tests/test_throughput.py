@@ -6,12 +6,17 @@ from PIL import Image
 import numpy as np
 from loma.device import device
 
-def test_throughput():    
+
+def test_throughput():
     model = LoMa(LoMa.Cfg(compile=False)).to(device)
     im_A = Image.open("assets/toronto_A.jpg").resize((560, 560))
     im_B = Image.open("assets/toronto_B.jpg").resize((560, 560))
-    im_A = torch.from_numpy(np.array(im_A)).permute(2, 0, 1).unsqueeze(0).to(device) / 255
-    im_B = torch.from_numpy(np.array(im_B)).permute(2, 0, 1).unsqueeze(0).to(device) / 255
+    im_A = (
+        torch.from_numpy(np.array(im_A)).permute(2, 0, 1).unsqueeze(0).to(device) / 255
+    )
+    im_B = (
+        torch.from_numpy(np.array(im_B)).permute(2, 0, 1).unsqueeze(0).to(device) / 255
+    )
     # warmup
     for i in range(10):
         model.match(im_A, im_B)
@@ -26,6 +31,7 @@ def test_throughput():
         torch.cuda.synchronize()
     end_time = perf_counter()
     print(f"Throughput: {T / (end_time - start_time)} fps")
+
 
 if __name__ == "__main__":
     test_throughput()

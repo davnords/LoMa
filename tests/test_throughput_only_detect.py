@@ -4,7 +4,8 @@ from loma import LoMa
 import torch
 from loma.device import device
 
-def test_throughput():    
+
+def test_throughput():
     model = LoMa(LoMa.Cfg(compile=True)).to(device)
     img_A = torch.randn(1, 3, 560, 560).to(device)
     num_kpts = 2048
@@ -23,6 +24,7 @@ def test_throughput():
         torch.cuda.synchronize()
     end_time = perf_counter()
     print(f"Throughput: {T / (end_time - start_time)} fps")
+
 
 if __name__ == "__main__":
     test_throughput()

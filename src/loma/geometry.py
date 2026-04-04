@@ -9,6 +9,7 @@ import numpy as np
 from loma.device import device
 from loma.types import Warp, GTSource, Batch
 
+
 def to_homogeneous(x: torch.Tensor) -> torch.Tensor:
     return torch.cat((x, torch.ones_like(x[..., :1])), dim=-1)
 
@@ -255,7 +256,11 @@ def bhwc_interpolate(
     x_chw = x.permute(0, 3, 1, 2)
     if align_corners is not None and antialias is not None:
         y = F.interpolate(
-            x_chw, size=size, mode=mode, align_corners=align_corners, antialias=antialias
+            x_chw,
+            size=size,
+            mode=mode,
+            align_corners=align_corners,
+            antialias=antialias,
         )
     elif align_corners is not None:
         y = F.interpolate(x_chw, size=size, mode=mode, align_corners=align_corners)
@@ -601,6 +606,7 @@ def estimate_pose_cv2_ransac(
     assert ret is not None
     return ret
 
+
 def compute_pose_inliers_cv2_ransac(
     kpts0: np.ndarray,
     kpts1: np.ndarray,
@@ -635,6 +641,7 @@ def compute_pose_inliers_cv2_ransac(
             ret = (R, t, mask.ravel() > 0)
     assert ret is not None
     return (best_num_inliers / len(kpts0), ret)
+
 
 def estimate_pose_essential(
     kps_A: np.ndarray,
@@ -748,7 +755,6 @@ def cosine_similarity(f_A: torch.Tensor, f_B: torch.Tensor) -> torch.Tensor:
     return res
 
 
-
 @torch.no_grad()
 def compute_sparse_mnn_matches(
     kpts_A,
@@ -764,38 +770,47 @@ def compute_sparse_mnn_matches(
 ):
     """
     Compute mutual nearest neighbor matches.
-    
-    For samples with source == "sparse", uses correspondences directly (keypoints should be 
+
+    For samples with source == "sparse", uses correspondences directly (keypoints should be
     [correspondences, detector_keypoints] concatenated, and MNN points to correspondence indices).
-    
+
     For samples with source == "depth" or "flow", computes MNN using depth/flow warping.
-    
+
     Args:
         gt_AB: Optional precomputed warp from A to B. If provided, skips recomputation.
         gt_BA: Optional precomputed warp from B to A. If provided, skips recomputation.
     """
     B = kpts_A.shape[0]
     device = kpts_A.device
-    
+
     source = batch.source if isinstance(batch.source, list) else [batch.source] * B
-    num_corresp = batch.num_corresp if isinstance(batch.num_corresp, list) else [batch.num_corresp] * B
-    
+    num_corresp = (
+        batch.num_corresp
+        if isinstance(batch.num_corresp, list)
+        else [batch.num_corresp] * B
+    )
+
     is_sparse = torch.tensor([s == "sparse" for s in source], device=device)
     all_mnn = []
-    
+
     # Handle sparse samples: MNN points to correspondence indices (idx_A == idx_B)
     if is_sparse.any():
         sparse_counts = torch.tensor(
             [num_corresp[b] if is_sparse[b] else 0 for b in range(B)],
-            device=device, dtype=torch.long
+            device=device,
+            dtype=torch.long,
         )
         total_sparse = sparse_counts.sum()
         if total_sparse > 0:
-            batch_idx = torch.repeat_interleave(torch.arange(B, device=device), sparse_counts)
-            corresp_idx = torch.cat([torch.arange(n, device=device) for n in sparse_counts.tolist()])
+            batch_idx = torch.repeat_interleave(
+                torch.arange(B, device=device), sparse_counts
+            )
+            corresp_idx = torch.cat(
+                [torch.arange(n, device=device) for n in sparse_counts.tolist()]
+            )
             sparse_mnn = torch.stack([batch_idx, corresp_idx, corresp_idx], dim=1)
             all_mnn.append(sparse_mnn)
-    
+
     # Handle warp-based samples (depth/flow)
     if (~is_sparse).any():
         # Use precomputed warps if provided, otherwise compute them
@@ -815,8 +830,8 @@ def compute_sparse_mnn_matches(
             )
         kpts_A_to_B = bhwc_grid_sample(gt_AB.warp, kpts_A[:, None])[:, 0]  # (B, N, 2)
         kpts_B_to_A = bhwc_grid_sample(gt_BA.warp, kpts_B[:, None])[:, 0]  # (B, N, 2)
-        D_B = torch.cdist(kpts_A_to_B, kpts_B).nan_to_num(nan=float('inf'))
-        D_A = torch.cdist(kpts_A, kpts_B_to_A).nan_to_num(nan=float('inf'))
+        D_B = torch.cdist(kpts_A_to_B, kpts_B).nan_to_num(nan=float("inf"))
+        D_A = torch.cdist(kpts_A, kpts_B_to_A).nan_to_num(nan=float("inf"))
         warp_mnn = torch.nonzero(
             (D_B == D_B.min(dim=-1, keepdim=True).values)
             * (D_A == D_A.min(dim=-2, keepdim=True).values)
@@ -828,7 +843,7 @@ def compute_sparse_mnn_matches(
             warp_mnn = warp_mnn[~is_sparse[warp_mnn[:, 0]]]
             if warp_mnn.numel() > 0:
                 all_mnn.append(warp_mnn)
-    
+
     if all_mnn:
         return torch.cat(all_mnn, dim=0)
     return torch.zeros((0, 3), device=device, dtype=torch.long)

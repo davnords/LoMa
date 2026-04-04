@@ -9,15 +9,16 @@ from loma.loma import LoMa
 
 logger = logging.getLogger(__name__)
 
+
 class ScanNet1500:
     def __init__(self, data_root="data/scannet/scans") -> None:
         self.data_root = data_root
 
     def benchmark(
-            self, 
-            model: LoMa,
-            num_ransac_runs: int = 5,
-        ):
+        self,
+        model: LoMa,
+        num_ransac_runs: int = 5,
+    ):
         thresholds = [5, 10, 20]
         data_root = self.data_root
         tmp = np.load(osp.join(data_root, "test.npz"))

@@ -140,9 +140,7 @@ class DaD(Model):
             coverage_pow=float(self.coverage_pow)
             if self.coverage_pow is not None
             else 0.5,
-            coverage_size=self.coverage_size
-            if self.coverage_size is not None
-            else 51,
+            coverage_size=self.coverage_size if self.coverage_size is not None else 51,
             subpixel=self.subpixel,
             subpixel_temp=self.subpixel_temp,
             scoremap=scoremap.reshape(B, H, W),

@@ -106,8 +106,7 @@ MAX_NUM_SPARSE_CORRESP = 64
 
 class Detector(Protocol):
     @property
-    def topleft(self) -> float:
-        ...
+    def topleft(self) -> float: ...
 
     def detect_from_path(
         self,
@@ -115,13 +114,12 @@ class Detector(Protocol):
         *,
         num_keypoints: int,
         return_dense_probs: bool = False,
-    ) -> dict[str, torch.Tensor]:
-        ...
+    ) -> dict[str, torch.Tensor]: ...
 
-    def detect(self, batch: Batch, *, num_keypoints: int, return_dense_probs: bool = False) -> dict[str, torch.Tensor]:
-        ...
+    def detect(
+        self, batch: Batch, *, num_keypoints: int, return_dense_probs: bool = False
+    ) -> dict[str, torch.Tensor]: ...
 
     def to_pixel_coords(
         self, normalized_coords: torch.Tensor, h: int, w: int
-    ) -> torch.Tensor:
-        ...
+    ) -> torch.Tensor: ...

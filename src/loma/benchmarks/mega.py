@@ -7,7 +7,7 @@ from loma.geometry import (
     compute_pose_error,
     compute_relative_pose,
     estimate_pose_cv2_ransac,
-    pose_auc
+    pose_auc,
 )
 
 logger = logging.getLogger(__name__)
@@ -49,7 +49,7 @@ class MegaDepthPoseEstimationBenchmark:
             pair_inds = range(len(pairs))
             for pairind in (
                 pbar := tqdm(
-                    pair_inds[:: sample_every],
+                    pair_inds[::sample_every],
                     desc="Current AUC: ?",
                     mininterval=10,
                 )
@@ -74,7 +74,9 @@ class MegaDepthPoseEstimationBenchmark:
 
                     try:
                         threshold = 0.5
-                        norm_threshold = threshold / (np.mean(np.abs(K1[:2, :2])) + np.mean(np.abs(K2[:2, :2])))
+                        norm_threshold = threshold / (
+                            np.mean(np.abs(K1[:2, :2])) + np.mean(np.abs(K2[:2, :2]))
+                        )
                         R_est, t_est, _ = estimate_pose_cv2_ransac(
                             kpts1,
                             kpts2,
