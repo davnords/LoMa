@@ -52,12 +52,10 @@ class DaD(Model):
         super().__init__()
         if cfg is None:
             cfg = DaD.Cfg()
-            weights = torch.hub.load_state_dict_from_url(
-                "https://github.com/Parskatt/dad/releases/download/v0.1.0/dad.pth",
-                map_location="cpu",
-            )
-        else:
-            weights = None
+        weights = torch.hub.load_state_dict_from_url(
+            "https://github.com/Parskatt/dad/releases/download/v0.1.0/dad.pth",
+            map_location="cpu",
+        )
         if cfg.arch == "dedode_s":
             encoder, decoder = dedode_detector_S()
         else:

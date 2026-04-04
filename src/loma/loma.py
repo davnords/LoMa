@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 import re
+import sys
 from typing import Annotated, Callable, Literal, Tuple
 import numpy as np
 from PIL import Image
@@ -279,12 +280,16 @@ class LoMa(Model):
             [MatchAssignment(cfg.embed_dim) for _ in range(cfg.n_layers)]
         )
 
-        self._detector = DaD().eval()
+        self._detector = DaD(DaD.Cfg(compile=cfg.compile)).eval()
         for p in self._detector.parameters():
             p.requires_grad = False
 
         self._descriptor = DeDoDeDescriptor(
-            DeDoDeDescriptor.Cfg(arch=cfg.descriptor, descriptor_dim=cfg.input_dim)
+            DeDoDeDescriptor.Cfg(
+                arch=cfg.descriptor,
+                compile=cfg.compile,
+                descriptor_dim=cfg.input_dim,
+            )
         ).eval()
         for p in self._descriptor.parameters():
             p.requires_grad = False
@@ -315,11 +320,9 @@ class LoMa(Model):
             )
 
         self.eval()
-        if cfg.compile:
-            # self.compile()
-            self._detector.compile()
-            self._descriptor.compile()
-            pass
+        if self.cfg.compile and sys.platform == "linux":
+            # macos compile slows inference down.
+            self.compile()
 
     @staticmethod
     def _is_unexpected_extra_layer_key(key: str, n_layers: int) -> bool:
