@@ -1,79 +1,15 @@
 from dataclasses import dataclass
-from typing import Any, Callable
 import torch
-from einops import rearrange
 from torch import nn
 import torchvision.models as models
-from torch.nn import functional as F
 from torch import Tensor
 
-from loma.types import Normalizer, FineFeaturesType
+from loma.types import FineFeaturesType
 from loma.device import device, amp_dtype
 from loma.normalizers import imagenet
 
 def swish(x: Tensor) -> Tensor:
     return x * torch.sigmoid(x)
-
-def wrap_with_normalize(
-    forward: Callable[[torch.Tensor], list[torch.Tensor]],
-    *,
-    normalizer: Normalizer,
-    patch_size: int,
-    enable_amp: bool,
-    frozen: bool,
-    normalize_feats: bool,
-):
-    def wrapped_forward(self, img: torch.Tensor) -> list[torch.Tensor]:
-        with (
-            torch.autocast(device.type, amp_dtype, enabled=enable_amp),
-            torch.set_grad_enabled(not frozen),
-        ):
-            if self.training and frozen:
-                self.eval()
-            B, C, H, W = img.shape
-            assert C == 3, f"Image must have 3 channels, but got shape {img.shape=}"
-            img_n = normalizer(img)
-            H = H // patch_size
-            W = W // patch_size
-            raw_outs = forward(img_n)
-            maybe_feat_normalizer = (
-                F.normalize if normalize_feats else lambda x, dim=-1: x
-            )
-            return [
-                maybe_feat_normalizer(
-                    rearrange(x, "B (H W) D -> B H W D", H=H, W=W), dim=-1
-                )
-                for x in raw_outs
-            ]
-
-    return wrapped_forward
-
-
-def wrap_model(
-    model: nn.Module,
-    *,
-    normalizer: Normalizer,
-    patch_size: int,
-    enable_amp: bool,
-    frozen: bool,
-    normalize_feats: bool,
-    func: Any,
-):
-    if enable_amp and frozen:  # if training we want params in fp32
-        model = model.to(amp_dtype)
-    if frozen:
-        for param in model.parameters():
-            param.requires_grad = False
-    model.frozen = frozen
-    type(model).forward = wrap_with_normalize(
-        func,
-        normalizer=normalizer,
-        patch_size=patch_size,
-        enable_amp=enable_amp,
-        frozen=frozen,
-        normalize_feats=normalize_feats,
-    )
-    return model
 
 class VGG(nn.Module):
     def forward(self, x):
@@ -126,8 +62,5 @@ class FineFeatures(nn.Module):
                 return VGG19(cfg.patch_size)
             case "vgg19bn":
                 return VGG19BN(cfg.patch_size)
-            case "flux2":
-                raise NotImplementedError("Flux2 is not supported for fine features")
-                return Flux2(cfg.patch_size)
             case _:
                 raise ValueError(f"Unknown refiner features type: {cfg.type}")

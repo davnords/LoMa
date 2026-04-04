@@ -100,7 +100,7 @@ Quality = Literal["high", "low"]
 GTSource = Literal["depth", "flow", "sparse"]
 DescriptorName = Literal["dinov3_vitl16", "dinov2_vitl14", "mum_vitl16", "flux2"]
 Normalizer = Literal["imagenet", "inception"]
-FineFeaturesType = Literal["vgg19", "vgg19bn", "flux2"]
+FineFeaturesType = Literal["vgg19", "vgg19bn"]
 MAX_NUM_SPARSE_CORRESP = 64
 
 

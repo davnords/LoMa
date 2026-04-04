@@ -26,7 +26,7 @@ def extract_patches_from_inds(x: torch.Tensor, inds: torch.Tensor, patch_size: i
     )  # B x K_H * K_W x N
     return patches
 
-
+# @torch.compile()
 def sample_keypoints(
     keypoint_probs: torch.Tensor,
     num_samples=8192,

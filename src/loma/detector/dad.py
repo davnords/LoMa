@@ -68,7 +68,6 @@ class DaD(Model):
         self.subpixel = cfg.subpixel
         self.subpixel_temp = cfg.subpixel_temp
         self.coverage_from_sparse = cfg.coverage_from_sparse
-        self.is_sigmoid = cfg.is_sigmoid
         if weights is not None:
             self.load_state_dict(weights)
         if cfg.compile:
@@ -107,40 +106,16 @@ class DaD(Model):
         return logits.float()
 
     def forward(
-        self, batch: Batch | dict[str, torch.Tensor]
+        self, images: torch.Tensor, num_keypoints: int
     ) -> dict[str, torch.Tensor]:
-        # wraps internal forward impl to handle different types of batches
-        if isinstance(batch, Batch):
-            images = torch.cat((batch.img_A, batch.img_B), dim=0)
-        elif isinstance(batch, dict) and "im_A" in batch:
-            images = torch.cat((batch["im_A"], batch["im_B"]), dim=0)
-        elif isinstance(batch, dict) and "image" in batch:
-            images = batch["image"]
-        else:
-            raise TypeError(
-                "Expected Batch or dict with keys ('im_A','im_B') or ('image',), "
-                f"got {type(batch)}"
-            )
         scoremap = self.forward_impl(images)
-        return {"scoremap": scoremap}
-
-    @torch.inference_mode()
-    def detect(
-        self, batch, *, num_keypoints, return_dense_probs=False
-    ) -> dict[str, torch.Tensor]:
-        self.train(False)
-        # TODO: using __call__ here gives me compile errors //je
-        scoremap = self.forward(batch)["scoremap"]
         B, K, H, W = scoremap.shape
-        if self.is_sigmoid:
-            dense_probs = torch.sigmoid(scoremap.reshape(B, K * H * W)).reshape(B, K, H * W).sum(dim=1)
-        else:
-            dense_probs = (
-                scoremap.reshape(B, K * H * W)
-                .softmax(dim=-1)
-                .reshape(B, K, H * W)
-                .sum(dim=1)
-            )
+        dense_probs = (
+            scoremap.reshape(B, K * H * W)
+            .softmax(dim=-1)
+            .reshape(B, K, H * W)
+            .sum(dim=1)
+        )
         dense_probs = dense_probs.reshape(B, H, W)
         keypoints, confidence = sample_keypoints(
             dense_probs,
@@ -159,9 +134,15 @@ class DaD(Model):
             scoremap=scoremap.reshape(B, H, W),
         )
         result = {"keypoints": keypoints, "keypoint_probs": confidence}
-        if return_dense_probs:
-            result["dense_probs"] = dense_probs
         return result
+
+    @torch.inference_mode()
+    def detect(
+        self, images: torch.Tensor, *, num_keypoints: int, return_dense_probs: bool=False
+    ) -> dict[str, torch.Tensor]:
+        self.train(False)
+        keypoints = self(images, num_keypoints)["keypoints"]
+        return keypoints
 
     def load_image(self, im_path, device=device) -> dict[str, torch.Tensor]:
         pil_im = Image.open(im_path)
@@ -176,11 +157,7 @@ class DaD(Model):
             H, W = self.resize, self.resize
         pil_im = pil_im.resize((W, H))
         standard_im = np.array(pil_im) / 255.0
-        return {
-            "image": torch.from_numpy(standard_im).permute(2, 0, 1)
-            .float()
-            .to(device)[None]
-        }
+        return torch.from_numpy(standard_im).permute(2, 0, 1).float().to(device)[None]
 
     @torch.inference_mode
     def detect_from_path(

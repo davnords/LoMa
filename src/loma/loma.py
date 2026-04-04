@@ -97,9 +97,9 @@ class SelfBlock(nn.Module):
         qkv = self.Wqkv(x)
         qkv = qkv.unflatten(-1, (self.num_heads, -1, 3)).transpose(1, 2)
         q, k, v = qkv[..., 0], qkv[..., 1], qkv[..., 2]
-        if encoding is not None:
-            q = apply_cached_rotary_emb(encoding, q)
-            k = apply_cached_rotary_emb(encoding, k)
+        # if encoding is not None:
+        q = apply_cached_rotary_emb(encoding, q)
+        k = apply_cached_rotary_emb(encoding, k)
         context = F.scaled_dot_product_attention(q, k, v)
         message = self.out_proj(context.transpose(1, 2).flatten(start_dim=-2))
         return x + self.ffn(torch.cat([x, message], -1))
@@ -213,7 +213,7 @@ class LoMa(Model):
         num_heads: int = 4
         filter_threshold: float = 0.1
         mp: bool = True
-        compile: bool = True
+        compile: bool = False
         normalize_descriptions: bool = False
         descriptor: Literal["dedode_b", "dedode_g"] = "dedode_b"
         num_keypoints: int = 4096
@@ -261,9 +261,10 @@ class LoMa(Model):
         self.to(device)
         self.eval()
         if cfg.compile:
-            self.compile()
-            self._detector.compile()
-            self._descriptor.compile()
+            # self.compile()
+            # self._detector.compile()
+            # self._descriptor.compile()
+            pass
         self.num_layers_inference = cfg.n_layers # Change if you want a faster model
 
     @torch.inference_mode()
@@ -280,67 +281,29 @@ class LoMa(Model):
 
     def forward(
         self,
-        batch: Batch | dict[str, torch.Tensor],
-        keypoints_A: torch.Tensor | None = None,
-        keypoints_B: torch.Tensor | None = None,
-        descriptors_A: torch.Tensor | None = None,
-        descriptors_B: torch.Tensor | None = None,
-    ) -> dict:
-        with torch.autocast(
-            enabled=self.cfg.mp, dtype=amp_dtype, device_type=device.type
-        ):
-            if isinstance(batch, Batch):
-                assert keypoints_A is not None and keypoints_B is not None
-                assert descriptors_A is not None and descriptors_B is not None
-                return self._forward(
-                    keypoints_A, keypoints_B, descriptors_A, descriptors_B
-                )
-            else:
-                data0, data1 = batch["image0"], batch["image1"]
-                return self._forward(
-                    data0["keypoints"],
-                    data1["keypoints"],
-                    data0["descriptors"],
-                    data1["descriptors"],
-                )
-
-    def _forward(
-        self,
         kpts0: torch.Tensor,
         kpts1: torch.Tensor,
         desc0: torch.Tensor,
         desc1: torch.Tensor,
     ) -> dict:
-        desc0 = desc0.detach().contiguous()
-        desc1 = desc1.detach().contiguous()
-        if self.cfg.normalize_descriptions:
-            desc0 = F.normalize(desc0, dim=-1)
-            desc1 = F.normalize(desc1, dim=-1)
 
-        if torch.is_autocast_enabled():
-            desc0 = desc0.half()
-            desc1 = desc1.half()
+        with torch.autocast(
+            enabled=self.cfg.mp, dtype=amp_dtype, device_type=device.type
+        ):
+            desc0 = desc0.detach().contiguous()
+            desc1 = desc1.detach().contiguous()
+            desc0 = self.input_proj(desc0)
+            desc1 = self.input_proj(desc1)
 
-        desc0 = self.input_proj(desc0)
-        desc1 = self.input_proj(desc1)
-
-        if self.posenc is not None:
             encoding0 = self.posenc(kpts0)
             encoding1 = self.posenc(kpts1)
-        else:
-            encoding0 = encoding1 = None
-
-        all_scores = []
-        for i in range(self.num_layers_inference):
-            desc0, desc1 = self.transformers[i](desc0, desc1, encoding0, encoding1)
-            # Only compute intermediate matches during training (as the loss is applied layer-wise)
-            if self.training or i == self.num_layers_inference - 1: 
-                scores, _ = self.log_assignment[i](desc0, desc1)
-                all_scores.append(scores)
+            for i in range(self.num_layers_inference):
+                desc0, desc1 = self.transformers[i](desc0, desc1, encoding0, encoding1)
+            scores, _ = self.log_assignment[i](desc0, desc1)
 
         return {
-            "scores": all_scores[-1],
-            "all_scores": all_scores,
+            "scores": scores,
+            # "all_scores": all_scores,
         }
 
     @torch.inference_mode()
@@ -351,7 +314,7 @@ class LoMa(Model):
         if num_keypoints is None:
             num_keypoints = self.cfg.num_keypoints
         if isinstance(image, str):
-            keypoints = self._detector.detect_from_path(image, num_keypoints=num_keypoints)["keypoints"]
+            keypoints = self._detector.detect_from_path(image, num_keypoints=num_keypoints)
             descriptions = self._descriptor.describe_keypoints_from_path(image, keypoints)["descriptions"]
             w, h = Image.open(image).size
         else:
@@ -379,12 +342,11 @@ class LoMa(Model):
         """
         keypoints_A, descriptors_A, h1, w1 = self.detect_and_describe(image_A, num_keypoints)
         keypoints_B, descriptors_B, h2, w2 = self.detect_and_describe(image_B, num_keypoints)
-
+        # return None
         if filter_threshold is None:
             filter_threshold = self.cfg.filter_threshold
 
-        batch = {"image0": {"keypoints": keypoints_A, "descriptors": descriptors_A}, "image1": {"keypoints": keypoints_B, "descriptors": descriptors_B}}
-        scores = self(batch)["scores"]
+        scores = self(keypoints_A, keypoints_B, descriptors_A, descriptors_B)["scores"]
         m0, _, _, _ = filter_matches(scores, filter_threshold)
 
         valid = m0[0] > -1

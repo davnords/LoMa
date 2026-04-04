@@ -28,3 +28,7 @@ eval = [
     "wxbs-benchmark>=0.0.4",
     "scipy>=1.15.3",
 ]
+dev = [
+    "ruff",
+    "pyright",
+]

@@ -22,9 +22,7 @@ if __name__ == "__main__":
     kpts_A, desc_A, h1, w1 = model.detect_and_describe(args.im_A)
     kpts_B, desc_B, h2, w2 = model.detect_and_describe(args.im_B)
     with torch.inference_mode():
-        # NOTE: Running ._forward directly is not recommended for maximum speed as it does not work with torch.compile...
-        # ...however, we use it here to more easily show the model internals
-        scores = model._forward(kpts_A, kpts_B, desc_A, desc_B)["scores"]
+        scores = model(kpts_A, kpts_B, desc_A, desc_B)["scores"]
     m0, *_ = filter_matches(scores, model.cfg.filter_threshold)
     valid = m0[0] > -1
     matched_A = to_pixel_coords(kpts_A[0][torch.where(valid)[0]], h1, w1).cpu().numpy()

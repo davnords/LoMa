@@ -7,7 +7,6 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torchvision.models as tvm
-import torchvision.transforms as transforms
 from PIL import Image
 
 from loma.device import device, amp_dtype
@@ -28,9 +27,13 @@ class DeDoDeDescriptor(Model):
         super().__init__()
 
         if cfg.arch == "dedode_b":
-            encoder, decoder = dedode_descriptor_B(descriptor_dim=cfg.descriptor_dim, hidden_blocks=cfg.hidden_blocks)
+            encoder, decoder = dedode_descriptor_B(
+                descriptor_dim=cfg.descriptor_dim, hidden_blocks=cfg.hidden_blocks
+            )
         elif cfg.arch == "dedode_g":
-            encoder, decoder = dedode_descriptor_G(descriptor_dim=cfg.descriptor_dim, hidden_blocks=cfg.hidden_blocks)
+            encoder, decoder = dedode_descriptor_G(
+                descriptor_dim=cfg.descriptor_dim, hidden_blocks=cfg.hidden_blocks
+            )
         else:
             raise ValueError(f"Architecture {cfg.arch} not supported")
         self.cfg = cfg
@@ -58,27 +61,15 @@ class DeDoDeDescriptor(Model):
             raise ValueError(f"Architecture {arch} not supported")
         model = DeDoDeDescriptor(cfg)
         missing_keys, unexpected_keys = model.load_state_dict(weights, strict=False)
-        assert len(unexpected_keys) == 0, f"Unexpected keys when loading pretrained weights: {unexpected_keys}"
+        assert len(unexpected_keys) == 0, (
+            f"Unexpected keys when loading pretrained weights: {unexpected_keys}"
+        )
         return model
-        
+
     def forward(
         self,
-        batch: Batch | dict[str, torch.Tensor] | torch.Tensor,
+        images: torch.Tensor,
     ):
-        if isinstance(batch, Batch):
-            images = torch.cat((batch.img_A, batch.img_B), dim=0)
-        elif isinstance(batch, dict) and "im_A" in batch:
-            images = torch.cat((batch["im_A"], batch["im_B"]), dim=0)
-        elif isinstance(batch, dict) and "image" in batch:
-            images = batch["image"]
-        elif isinstance(batch, torch.Tensor):
-            images = batch
-        else:
-            raise TypeError(
-                "Expected Batch or dict with keys ('im_A','im_B') or ('image',) or torch.Tensor, "
-                f"got {type(batch)}"
-            )
-
         features, sizes = self.encoder(images)
         descriptions = 0
         context = None
@@ -99,9 +90,14 @@ class DeDoDeDescriptor(Model):
         return descriptions
 
     @torch.inference_mode()
-    def describe_keypoints(self, batch: Batch | dict[str, torch.Tensor] | torch.Tensor, keypoints: torch.Tensor):
+    def describe_keypoints(
+        self,
+        images: torch.Tensor,
+        keypoints: torch.Tensor,
+    ):
         self.train(False)
-        description_grid = self.forward(batch)
+        # TODO is this compile error //je ?
+        description_grid = self(images)
         described_keypoints = F.grid_sample(
             description_grid.float(),
             keypoints[:, None],
@@ -111,7 +107,14 @@ class DeDoDeDescriptor(Model):
         return {"descriptions": described_keypoints}
 
     def read_image(self, im_path, H=784, W=784):
-        return torch.from_numpy(np.array(Image.open(im_path).convert("RGB").resize((W, H))) / 255.0).permute(2, 0, 1).float().to(device)[None]
+        return (
+            torch.from_numpy(
+                np.array(Image.open(im_path).convert("RGB").resize((W, H))) / 255.0
+            )
+            .permute(2, 0, 1)
+            .float()
+            .to(device)[None]
+        )
 
     def describe_keypoints_from_path(self, im_path, keypoints, H=784, W=784):
         batch = {"image": self.read_image(im_path, H=H, W=W)}
@@ -124,7 +127,7 @@ class Decoder(nn.Module):
     ) -> None:
         super().__init__(*args, **kwargs)
         self.layers = layers
-        self.scales = sorted(list(layers.keys()), key = lambda x: int(x), reverse=True)
+        self.scales = sorted(list(layers.keys()), key=lambda x: int(x), reverse=True)
         self.super_resolution = super_resolution
         self.descriptor_dim = descriptor_dim
 
@@ -211,12 +214,13 @@ class ConvRefiner(nn.Module):
         b, c, hs, ws = feats.shape
         with torch.autocast(
             device_type=feats.device.type, enabled=self.amp, dtype=self.amp_dtype
-        ):  
+        ):
             x0 = self.block1(feats)
             x = self.hidden_blocks(x0)
             x = (x + x0) / 1.4
             x = self.out_conv(x)
             return x
+
 
 class VGG(nn.Module):
     def __init__(self, size="19", amp=False, amp_dtype=amp_dtype) -> None:
@@ -230,7 +234,6 @@ class VGG(nn.Module):
         # Maxpool layers: 6, 13, 26, 39
         self.amp = amp
         self.amp_dtype = amp_dtype
-
 
     def forward(self, x, **kwargs):
         with torch.autocast(
@@ -247,16 +250,21 @@ class VGG(nn.Module):
 
 
 class FrozenDINOv2(nn.Module):
-    def __init__(self, amp = True, amp_dtype = amp_dtype, dinov2_weights = None):
+    def __init__(self, amp=True, amp_dtype=amp_dtype, dinov2_weights=None):
         super().__init__()
         if dinov2_weights is None:
-            dinov2_weights = torch.hub.load_state_dict_from_url("https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_pretrain.pth", map_location="cpu")
+            dinov2_weights = torch.hub.load_state_dict_from_url(
+                "https://dl.fbaipublicfiles.com/dinov2/dinov2_vitl14/dinov2_vitl14_pretrain.pth",
+                map_location="cpu",
+            )
         from .transformer import vit_large
-        vit_kwargs = dict(img_size= 518,
-            patch_size= 14,
-            init_values = 1.0,
-            ffn_layer = "mlp",
-            block_chunks = 0,
+
+        vit_kwargs = dict(
+            img_size=518,
+            patch_size=14,
+            init_values=1.0,
+            ffn_layer="mlp",
+            block_chunks=0,
         )
         dinov2_vitl14 = vit_large(**vit_kwargs).eval()
         dinov2_vitl14.load_state_dict(dinov2_weights)
@@ -272,17 +280,26 @@ class FrozenDINOv2(nn.Module):
     def forward(self, x):
         B, C, H, W = x.shape
         with torch.inference_mode():
-            dinov2_features_16 = self.dinov2_vitl14.forward_features(x.to(self.amp_dtype))
-            features_16 = dinov2_features_16['x_norm_patchtokens'].permute(0,2,1).reshape(B,1024,H//14, W//14)
-        return [features_16.clone()], [(H//14, W//14)] # clone from inference mode to use in autograd
+            dinov2_features_16 = self.dinov2_vitl14.forward_features(
+                x.to(self.amp_dtype)
+            )
+            features_16 = (
+                dinov2_features_16["x_norm_patchtokens"]
+                .permute(0, 2, 1)
+                .reshape(B, 1024, H // 14, W // 14)
+            )
+        return [features_16.clone()], [
+            (H // 14, W // 14)
+        ]  # clone from inference mode to use in autograd
+
 
 class VGG_DINOv2(nn.Module):
-    def __init__(self, vgg_kwargs = None, dinov2_kwargs = None):
+    def __init__(self, vgg_kwargs=None, dinov2_kwargs=None):
         assert vgg_kwargs is not None and dinov2_kwargs is not None, "Input kwargs pls"
-        super().__init__()        
+        super().__init__()
         self.vgg = VGG(**vgg_kwargs)
         self.frozen_dinov2 = FrozenDINOv2(**dinov2_kwargs)
-        
+
     def forward(self, x):
         feats_vgg, sizes_vgg = self.vgg(x)
         feat_dinov2, size_dinov2 = self.frozen_dinov2(x)
@@ -293,7 +310,7 @@ class FrozenDINOv3(nn.Module):
     def __init__(self, *, amp: bool, amp_dtype: torch.dtype):
         super().__init__()
         from loma.features import Descriptor
-        
+
         cfg = Descriptor.Cfg(
             name="dinov3_vitl16",
             enable_amp=amp,
@@ -312,16 +329,17 @@ class FrozenDINOv3(nn.Module):
 
 
 class VGG_DINOv3(nn.Module):
-    def __init__(self, vgg_kwargs = None, dinov3_kwargs = None):
+    def __init__(self, vgg_kwargs=None, dinov3_kwargs=None):
         assert vgg_kwargs is not None and dinov3_kwargs is not None, "Input kwargs pls"
-        super().__init__()        
+        super().__init__()
         self.vgg = VGG(**vgg_kwargs)
         self.frozen_dinov3 = FrozenDINOv3(**dinov3_kwargs)
-        
+
     def forward(self, x):
         feats_vgg, sizes_vgg = self.vgg(x)
         feat_dinov3, size_dinov3 = self.frozen_dinov3(x)
         return feats_vgg + feat_dinov3, sizes_vgg + size_dinov3
+
 
 def dedode_descriptor_B(descriptor_dim: int, hidden_blocks: int = 5):
     amp = True
@@ -366,8 +384,9 @@ def dedode_descriptor_B(descriptor_dim: int, hidden_blocks: int = 5):
     return encoder, decoder
 
 
-
-def dedode_descriptor_G(descriptor_dim: int, dinov2_weights: str | None = None, hidden_blocks: int = 5):
+def dedode_descriptor_G(
+    descriptor_dim: int, dinov2_weights: str | None = None, hidden_blocks: int = 5
+):
     amp = True
 
     conv_refiner = nn.ModuleDict(
@@ -414,8 +433,8 @@ def dedode_descriptor_G(descriptor_dim: int, dinov2_weights: str | None = None, 
             ),
         }
     )
-    vgg_kwargs = dict(size = "19", amp = amp, amp_dtype = amp_dtype)
-    dinov2_kwargs = dict(amp = amp, amp_dtype = amp_dtype, dinov2_weights = dinov2_weights)
-    encoder = VGG_DINOv2(vgg_kwargs = vgg_kwargs, dinov2_kwargs = dinov2_kwargs)
+    vgg_kwargs = dict(size="19", amp=amp, amp_dtype=amp_dtype)
+    dinov2_kwargs = dict(amp=amp, amp_dtype=amp_dtype, dinov2_weights=dinov2_weights)
+    encoder = VGG_DINOv2(vgg_kwargs=vgg_kwargs, dinov2_kwargs=dinov2_kwargs)
     decoder = Decoder(conv_refiner, descriptor_dim=descriptor_dim)
     return encoder, decoder
