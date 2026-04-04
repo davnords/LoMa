@@ -8,7 +8,7 @@ from loma.device import device
 
 def test_throughput():
     model = LoMa(LoMa.Cfg(compile=True)).to(device)
-    img_A = torch.randn(1, 3, 560, 560).to(device)
+    img_A = torch.randn(1, 3, 784, 784).to(device)
     num_kpts = 2048
     keypoints = torch.empty(1, num_kpts, 2, device=device).uniform_(-1.0, 1.0)
 

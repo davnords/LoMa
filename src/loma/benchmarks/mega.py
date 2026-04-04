@@ -17,8 +17,10 @@ class MegaDepthPoseEstimationBenchmark:
     def __init__(
         self,
         data_root="data/megadepth",
+        num_keypoints: int = 4096,
     ) -> None:
         self.data_root = data_root
+        self.num_keypoints = num_keypoints
         self._post_init()
 
     def _post_init(self):
@@ -65,7 +67,9 @@ class MegaDepthPoseEstimationBenchmark:
                 im_A_path = f"{data_root}/{im_paths[idx1]}"
                 im_B_path = f"{data_root}/{im_paths[idx2]}"
 
-                kpts1, kpts2 = model.match(im_A_path, im_B_path)
+                kpts1, kpts2 = model.match(
+                    im_A_path, im_B_path, num_keypoints=self.num_keypoints
+                )
 
                 for _ in range(num_ransac_runs):
                     shuffling = np.random.permutation(np.arange(len(kpts1)))

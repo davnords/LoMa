@@ -16,6 +16,7 @@ class WxBSBenchmark:
         subset: str = "test"
         dataset_path: str = "data/WxBS"
         download: bool = True
+        num_keypoints: int = 4096
 
     def __init__(self, cfg: Cfg | None = None) -> None:
         if cfg is None:
@@ -47,7 +48,11 @@ class WxBSBenchmark:
     ):
         Fs = []
         for pair_dict in tqdm(self.dataset):
-            kpts1, kpts2 = model.match(pair_dict["imgfname1"], pair_dict["imgfname2"])
+            kpts1, kpts2 = model.match(
+                pair_dict["imgfname1"],
+                pair_dict["imgfname2"],
+                num_keypoints=self.cfg.num_keypoints,
+            )
 
             try:
                 F, _ = cv2.findFundamentalMat(

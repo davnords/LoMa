@@ -1,7 +1,6 @@
 import os.path as osp
 import logging
 import numpy as np
-from PIL import Image
 from tqdm import tqdm
 
 from loma.geometry import compute_pose_error, pose_auc, estimate_pose_cv2_ransac
@@ -11,8 +10,11 @@ logger = logging.getLogger(__name__)
 
 
 class ScanNet1500:
-    def __init__(self, data_root="data/scannet/scans") -> None:
+    def __init__(
+        self, data_root="data/scannet/scans", num_keypoints: int = 4096
+    ) -> None:
         self.data_root = data_root
+        self.num_keypoints = num_keypoints
 
     def benchmark(
         self,
@@ -35,7 +37,6 @@ class ScanNet1500:
                 "color",
                 f"{scene[2]}.jpg",
             )
-            im_A = Image.open(im_A_path)
             im_B_path = osp.join(
                 self.data_root,
                 "scans_test",
@@ -43,29 +44,23 @@ class ScanNet1500:
                 "color",
                 f"{scene[3]}.jpg",
             )
-            im_B = Image.open(im_B_path)
             T_gt = rel_pose[pairind].reshape(3, 4)
             R, t = T_gt[:3, :3], T_gt[:3, 3]
-            K = np.stack(
-                [
-                    np.array([float(i) for i in r.split()])
-                    for r in open(
-                        osp.join(
-                            self.data_root,
-                            "scans_test",
-                            scene_name,
-                            "intrinsic",
-                            "intrinsic_color.txt",
-                        ),
-                        "r",
-                    )
-                    .read()
-                    .split("\n")
-                    if r
-                ]
+            intrinsic_path = osp.join(
+                self.data_root,
+                "scans_test",
+                scene_name,
+                "intrinsic",
+                "intrinsic_color.txt",
             )
-            w1, h1 = im_A.size
-            w2, h2 = im_B.size
+            with open(intrinsic_path, "r") as f:
+                K = np.stack(
+                    [
+                        np.array([float(i) for i in r.split()])
+                        for r in f.read().split("\n")
+                        if r
+                    ]
+                )
 
             kpts1, kpts2 = model.match(im_A_path, im_B_path)
 

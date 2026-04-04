@@ -8,7 +8,7 @@ from loma.device import device
 
 
 def test_throughput():
-    model = LoMa(LoMa.Cfg(compile=False)).to(device)
+    model = LoMa(LoMa.Cfg(compile=True, n_layers_inference=3)).to(device)
     im_A = Image.open("assets/toronto_A.jpg").resize((560, 560))
     im_B = Image.open("assets/toronto_B.jpg").resize((560, 560))
     im_A = (

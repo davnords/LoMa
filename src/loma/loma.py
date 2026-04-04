@@ -240,13 +240,14 @@ class LoMa(Model):
         input_dim: int = 256
         embed_dim: int = 256
         n_layers: int = 9
+        n_layers_inference: int = 9
         num_heads: int = 4
         filter_threshold: float = 0.1
         mp: bool = True
         compile: bool = False
         normalize_descriptions: bool = False
         descriptor: Literal["dedode_b", "dedode_g"] = "dedode_b"
-        num_keypoints: int = 4096
+        num_keypoints: int = 2048
         # Positional encoding config
         posenc_type: Literal["learnable", "fixed", "none"] = "learnable"
         # basically the wavelength of the positional encoding
@@ -292,11 +293,11 @@ class LoMa(Model):
         self.transformers = nn.ModuleList(
             [
                 TransformerLayer(cfg.embed_dim, cfg.num_heads)
-                for _ in range(cfg.n_layers)
+                for _ in range(cfg.n_layers_inference)
             ]
         )
         self.log_assignment = nn.ModuleList(
-            [MatchAssignment(cfg.embed_dim) for _ in range(cfg.n_layers)]
+            [MatchAssignment(cfg.embed_dim) for _ in range(cfg.n_layers_inference)]
         )
 
         self._detector = DaD().eval()
@@ -313,10 +314,12 @@ class LoMa(Model):
         self.eval()
         if cfg.compile:
             # self.compile()
-            # self._detector.compile()
-            # self._descriptor.compile()
+            self._detector.compile()
+            self._descriptor.compile()
             pass
-        self.num_layers_inference = cfg.n_layers  # Change if you want a faster model
+        self.num_layers_inference = (
+            cfg.n_layers_inference
+        )  # Change if you want a faster model
 
     @torch.inference_mode()
     def detect(self, batch: Batch, num_keypoints: int | None = None) -> dict:
@@ -459,5 +462,12 @@ def create_model(name: Literal["loma_B128", "loma_B", "loma_L", "loma_G"]) -> Lo
     else:
         raise ValueError(f"Model {name} not supported")
     model = LoMa(cfg)
-    model.load_state_dict(weights, strict=True)
+    missing_keys, unexpected_keys = model.load_state_dict(weights, strict=False)
+    if len(unexpected_keys) > 0:
+        assert cfg.n_layers > cfg.n_layers_inference, (
+            f"Unexpected keys when loading pretrained weights: {unexpected_keys}"
+        )
+    assert len(missing_keys) == 0, (
+        f"Missing keys when loading pretrained weights: {missing_keys}"
+    )
     return model

@@ -22,6 +22,7 @@ class RubikBenchmark:
         data_path: str = "data/nuScenes"
         seed: int | None = None
         estimate_pose_method: Literal["essential", "fundamental"] = "essential"
+        num_keypoints: int = 4096
 
     def __init__(
         self,
@@ -83,7 +84,9 @@ class RubikBenchmark:
                     # Get gt pose
                     gt_pose = np.array(data[box][scene][str(pairs[i])]["rel_pose"])
 
-                    mkpts1, mkpts2 = model.match(pair[0], pair[1])
+                    mkpts1, mkpts2 = model.match(
+                        pair[0], pair[1], num_keypoints=self.cfg.num_keypoints
+                    )
 
                     # Estimate pose
                     K1 = np.array(data[box][scene][str(pairs[i])]["K1"])

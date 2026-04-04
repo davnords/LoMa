@@ -26,6 +26,7 @@ class VGG(nn.Module):
                 x = layer(x)
             return feats
 
+
 class VGG19BN(VGG):
     def __init__(self, patch_size: int) -> None:
         super().__init__()
