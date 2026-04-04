@@ -287,7 +287,7 @@ class LoMa(Model):
         descriptors_B: torch.Tensor | None = None,
     ) -> dict:
         with torch.autocast(
-            enabled=self.cfg.mp, dtype=amp_dtype, device_type="cuda"
+            enabled=self.cfg.mp, dtype=amp_dtype, device_type=device.type
         ):
             if isinstance(batch, Batch):
                 assert keypoints_A is not None and keypoints_B is not None
