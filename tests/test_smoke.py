@@ -8,6 +8,7 @@ from loma.detector.dad import DaD
 def test_public_api_imports() -> None:
     assert LoMa is not None
 
+
 def test_detector_dense_probs() -> None:
     detector = DaD(DaD.Cfg(compile=False))
     images = torch.rand(1, 3, 64, 64)

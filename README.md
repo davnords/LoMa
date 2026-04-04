@@ -20,10 +20,11 @@
 
 ## How to Use
 ```python
-from loma import create_model
+import cv2
+from loma import LoMa, LoMaB
 
 # load pretrained model
-model = create_model("loma_B") # [loma_B128, loma_B, loma_L, loma_G]
+model = LoMa(LoMaB())  # also available: LoMaB128, LoMaL, LoMaG
 # Define image paths, e.g.
 img_A_path, img_B_path = "assets/0015_A.jpg", "assets/0015_B.jpg"
 # Extract matching keypoints in image coordinates
@@ -53,7 +54,7 @@ source scripts/eval_prep.sh
 ```
 To run a benchmark you need to install the optional dependencies by e.g. `uv sync --extra eval`. Thereafter, you can use the following call signature:
 ```bash
-uv run eval.py --name loma_B --benchmark mega1500
+uv run eval.py matcher:loma-b --benchmark mega1500
 ```
 ### Expected Results
 The results are similar to those reported in the paper. E.g., when we run the above command we get `Mega-1500: [56.0, 71.9, 83.7]`, which is similar to the results in the paper.

@@ -1,5 +1,4 @@
 from dataclasses import dataclass
-import math
 import re
 from typing import Annotated, Callable, Literal, Tuple
 import numpy as np
@@ -46,13 +45,11 @@ class LearnableFourierPositionalEncoding(nn.Module):
         F_dim: int | None = None,
         *,
         gamma: float,
-        posenc_dist: Literal["normal", "reciprocal"],
     ) -> None:
         super().__init__()
         F_dim = F_dim if F_dim is not None else dim
         self.gamma = gamma
         self.Wr = nn.Linear(M, F_dim // 2, bias=False)
-        assert posenc_dist == "normal"
         nn.init.normal_(self.Wr.weight.data, mean=0, std=self.gamma**-2)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -70,26 +67,11 @@ class FixedPosEnc(nn.Module):
         F_dim: int | None = None,
         *,
         gamma: float,
-        posenc_dist: Literal["normal", "reciprocal"],
     ) -> None:
         super().__init__()
         F_dim = F_dim if F_dim is not None else dim
         self.gamma = gamma
-        if posenc_dist == "normal":
-            freqs = torch.randn(F_dim // 2, M).to(device) * self.gamma**-2
-        elif posenc_dist == "reciprocal":
-            min_freq = 1e-0  # about ~1 Hz
-            assert 1 / gamma > min_freq
-            max_freq = 1 / gamma
-            freqs = (
-                torch.rand(F_dim // 2, M).to(device)
-                * (math.log(max_freq) - math.log(min_freq))
-                + math.log(min_freq)
-            ).exp()
-        else:
-            raise ValueError(
-                f"Positional encoding distribution {posenc_dist} not supported"
-            )
+        freqs = torch.randn(F_dim // 2, M).to(device) * self.gamma**-2
         self.Wr = nn.Linear(M, F_dim // 2, bias=False)
         with torch.no_grad():
             self.Wr.weight.data = freqs
@@ -250,12 +232,10 @@ class LoMa(Model):
         descriptor: Literal["dedode_b", "dedode_g"] = "dedode_b"
         num_keypoints: int = 2048
         # Positional encoding config
-        posenc_type: Literal["learnable", "fixed", "none"] = "learnable"
+        posenc_type: Literal["learnable", "fixed"] = "learnable"
         # basically the wavelength of the positional encoding
         posenc_gamma: float = 1.0
-        # posenc
-        posenc_dist: Literal["normal", "reciprocal"] = "normal"
-        # Optional pretrained checkpoint URL used by create_model.
+        # Optional pretrained checkpoint URL.
         weights_url: str | None = None
 
     def __init__(self, cfg: Cfg | None = None) -> None:
@@ -276,7 +256,6 @@ class LoMa(Model):
                 head_dim,
                 head_dim,
                 gamma=cfg.posenc_gamma,
-                posenc_dist=cfg.posenc_dist,
             )
         elif cfg.posenc_type == "fixed":
             self.posenc = FixedPosEnc(
@@ -284,17 +263,17 @@ class LoMa(Model):
                 head_dim,
                 head_dim,
                 gamma=cfg.posenc_gamma,
-                posenc_dist=cfg.posenc_dist,
             )
-        elif cfg.posenc_type == "none":
-            self.posenc = None
         else:
             raise ValueError(
                 f"Positional encoding type {cfg.posenc_type} not supported"
             )
 
         self.transformers = nn.ModuleList(
-            [TransformerLayer(cfg.embed_dim, cfg.num_heads) for _ in range(cfg.n_layers)]
+            [
+                TransformerLayer(cfg.embed_dim, cfg.num_heads)
+                for _ in range(cfg.n_layers)
+            ]
         )
         self.log_assignment = nn.ModuleList(
             [MatchAssignment(cfg.embed_dim) for _ in range(cfg.n_layers)]
@@ -324,7 +303,9 @@ class LoMa(Model):
                     for key in unexpected_keys
                     if self._is_unexpected_extra_layer_key(key, cfg.n_layers)
                 }
-                disallowed_keys = sorted(set(unexpected_keys) - allowed_extra_layer_keys)
+                disallowed_keys = sorted(
+                    set(unexpected_keys) - allowed_extra_layer_keys
+                )
                 assert len(disallowed_keys) == 0, (
                     "Unexpected keys when loading pretrained weights "
                     f"(not extra layers beyond n_layers={cfg.n_layers}): {disallowed_keys}"
@@ -339,6 +320,7 @@ class LoMa(Model):
             self._detector.compile()
             self._descriptor.compile()
             pass
+
     @staticmethod
     def _is_unexpected_extra_layer_key(key: str, n_layers: int) -> bool:
         match = re.match(r"^(transformers|log_assignment)\.(\d+)\.", key)
@@ -377,11 +359,6 @@ class LoMa(Model):
             desc1 = desc1.to(device).detach().contiguous()
             desc0 = self.input_proj(desc0)
             desc1 = self.input_proj(desc1)
-
-            if self.posenc is None:
-                raise RuntimeError(
-                    "LoMa.forward requires posenc_type other than 'none'"
-                )
             encoding0 = self.posenc(kpts0)
             encoding1 = self.posenc(kpts1)
             scores = None
