@@ -254,6 +254,8 @@ class LoMa(Model):
         posenc_gamma: float = 1.0
         # posenc
         posenc_dist: Literal["normal", "reciprocal"] = "normal"
+        # Optional pretrained checkpoint URL used by create_model.
+        weights_url: str | None = None
 
     def __init__(self, cfg: Cfg | None = None) -> None:
         super().__init__()
@@ -311,6 +313,21 @@ class LoMa(Model):
             p.requires_grad = False
 
         self.to(device)
+
+        if cfg.weights_url is not None:
+            weights = torch.hub.load_state_dict_from_url(
+                cfg.weights_url,
+                map_location=device,
+            )
+            missing_keys, unexpected_keys = self.load_state_dict(weights, strict=False)
+            if len(unexpected_keys) > 0:
+                assert cfg.n_layers > cfg.n_layers_inference, (
+                    f"Unexpected keys when loading pretrained weights: {unexpected_keys}"
+                )
+            assert len(missing_keys) == 0, (
+                f"Missing keys when loading pretrained weights: {missing_keys}"
+            )
+
         self.eval()
         if cfg.compile:
             # self.compile()
@@ -434,40 +451,70 @@ class LoMa(Model):
         ).cpu().numpy()
 
 
-def create_model(name: Literal["loma_B128", "loma_B", "loma_L", "loma_G"]) -> LoMa:
-    if name == "loma_B128":
-        cfg = LoMa.Cfg(input_dim=128, descriptor="dedode_b")
-        weights = torch.hub.load_state_dict_from_url(
-            "https://github.com/davnords/storage/releases/download/loma/loma_B128.pth",
-            map_location=device,
-        )
-    elif name == "loma_B":
-        cfg = LoMa.Cfg(embed_dim=256, num_heads=4, descriptor="dedode_g")
-        weights = torch.hub.load_state_dict_from_url(
-            "https://github.com/davnords/storage/releases/download/loma/loma_B.pt",
-            map_location=device,
-        )
-    elif name == "loma_L":
-        cfg = LoMa.Cfg(embed_dim=512, num_heads=8, descriptor="dedode_g")
-        weights = torch.hub.load_state_dict_from_url(
-            "https://github.com/davnords/storage/releases/download/loma/loma_L.pth",
-            map_location=device,
-        )
-    elif name == "loma_G":
-        cfg = LoMa.Cfg(embed_dim=1024, num_heads=16, descriptor="dedode_g")
-        weights = torch.hub.load_state_dict_from_url(
-            "https://github.com/davnords/storage/releases/download/loma/loma_G.pth",
-            map_location=device,
-        )
-    else:
-        raise ValueError(f"Model {name} not supported")
-    model = LoMa(cfg)
-    missing_keys, unexpected_keys = model.load_state_dict(weights, strict=False)
-    if len(unexpected_keys) > 0:
-        assert cfg.n_layers > cfg.n_layers_inference, (
-            f"Unexpected keys when loading pretrained weights: {unexpected_keys}"
-        )
-    assert len(missing_keys) == 0, (
-        f"Missing keys when loading pretrained weights: {missing_keys}"
+@dataclass(frozen=True, kw_only=True)
+class LoMaB128(LoMa.Cfg):
+    name: Literal["loma_B128"] = "loma_B128"
+    input_dim: int = 128
+    descriptor: Literal["dedode_b"] = "dedode_b"
+    weights_url: str = (
+        "https://github.com/davnords/storage/releases/download/loma/loma_B128.pth"
     )
-    return model
+
+
+@dataclass(frozen=True, kw_only=True)
+class LoMaB(LoMa.Cfg):
+    name: Literal["loma_B"] = "loma_B"
+    embed_dim: int = 256
+    num_heads: int = 4
+    descriptor: Literal["dedode_g"] = "dedode_g"
+    weights_url: str = (
+        "https://github.com/davnords/storage/releases/download/loma/loma_B.pt"
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class LoMaL(LoMa.Cfg):
+    name: Literal["loma_L"] = "loma_L"
+    embed_dim: int = 512
+    num_heads: int = 8
+    descriptor: Literal["dedode_g"] = "dedode_g"
+    weights_url: str = (
+        "https://github.com/davnords/storage/releases/download/loma/loma_L.pth"
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class LoMaG(LoMa.Cfg):
+    name: Literal["loma_G"] = "loma_G"
+    embed_dim: int = 1024
+    num_heads: int = 16
+    descriptor: Literal["dedode_g"] = "dedode_g"
+    weights_url: str = (
+        "https://github.com/davnords/storage/releases/download/loma/loma_G.pth"
+    )
+
+
+LoMaName = Literal["loma_B128", "loma_B", "loma_L", "loma_G"]
+# Accept either a raw LoMa.Cfg instance or a named preset.
+LoMaConfig = LoMaB128 | LoMaB | LoMaL | LoMaG | LoMa.Cfg
+
+
+# def _config_from_name(name: LoMaName) -> LoMaPresetConfig:
+#     if name == "loma_B128":
+#         return LoMaB128Config()
+#     if name == "loma_B":
+#         return LoMaBConfig()
+#     if name == "loma_L":
+#         return LoMaLConfig()
+#     if name == "loma_G":
+#         return LoMaGConfig()
+#     raise ValueError(f"Model {name} not supported")
+
+
+# def create_model(name_or_config: LoMaConfig = "loma_B") -> LoMa:
+#     if isinstance(name_or_config, str):
+#         cfg = _config_from_name(name_or_config)
+#     else:
+#         cfg = name_or_config
+
+#     return LoMa(cfg)

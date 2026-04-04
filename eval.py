@@ -2,7 +2,7 @@ from typing import Literal
 import tyro
 import os
 
-from loma.loma import create_model
+from loma.loma import LoMaName, create_model
 from loma.random import set_seed
 from loma.benchmarks import (
     Mega1500,
@@ -13,12 +13,7 @@ from loma.benchmarks import (
 
 
 def main(
-    name: Literal[
-        "loma_B128",
-        "loma_B",
-        "loma_L",
-        "loma_G",
-    ] = "loma_B",
+    name: LoMaName = "loma_B",
     benchmark: Literal[
         "mega1500",
         "scannet1500",

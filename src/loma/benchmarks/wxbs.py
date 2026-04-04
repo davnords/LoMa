@@ -21,7 +21,7 @@ class WxBSBenchmark:
     def __init__(self, cfg: Cfg | None = None) -> None:
         if cfg is None:
             cfg = WxBSBenchmark.Cfg()
-        self.subset = cfg.subset
+        self.cfg = cfg
         WxBSDataset.urls["v1.1"][0] = (
             "https://github.com/Parskatt/storage/releases/download/wxbs/WxBS_v1.1.zip"
         )
@@ -39,7 +39,7 @@ class WxBSBenchmark:
 
         WxBSDataset.__getitem__ = wrap(WxBSDataset.__getitem__)
         self.dataset = WxBSDataset(
-            cfg.dataset_path, subset=self.subset, download=cfg.download
+            cfg.dataset_path, subset=cfg.subset, download=cfg.download
         )
 
     def benchmark(
@@ -65,7 +65,7 @@ class WxBSBenchmark:
                 F = np.array([[0.0, 0.0, 0.0], [0.0, 0.0, -1.0], [0.0, 1.0, 0.0]])
             Fs.append(F)
 
-        result_dict, thresholds = evaluate_Fs(Fs, self.subset)
+        result_dict, thresholds = evaluate_Fs(Fs, self.cfg.subset)
 
         avg_pck = result_dict["average"]
         mAA_10px = avg_pck[:11].mean()
