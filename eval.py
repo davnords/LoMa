@@ -1,8 +1,10 @@
 from typing import Literal
-import tyro
 import os
 
-from loma.loma import LoMaName, create_model
+import tyro
+
+from loma import LoMa, LoMaB
+from loma.loma import LoMaConfig
 from loma.random import set_seed
 from loma.benchmarks import (
     Mega1500,
@@ -13,7 +15,7 @@ from loma.benchmarks import (
 
 
 def main(
-    name: LoMaName = "loma_B",
+    matcher: LoMaConfig = LoMaB(),
     benchmark: Literal[
         "mega1500",
         "scannet1500",
@@ -22,7 +24,7 @@ def main(
     ] = "mega1500",
 ):
     set_seed(1337)
-    model = create_model(name)
+    model = LoMa(matcher)
     if benchmark == "mega1500":
         mega1500 = Mega1500()
         res = mega1500.benchmark(model)
@@ -42,12 +44,13 @@ def main(
     else:
         raise ValueError(f"Invalid benchmark: {benchmark}")
 
+    matcher_name = getattr(matcher, "name", type(matcher).__name__.lower())
     os.makedirs("results", exist_ok=True)
-    with open(f"results/{name}_{benchmark}.json", "w") as f:
+    with open(f"results/{matcher_name}_{benchmark}.json", "w") as f:
         import json
 
         json.dump(res, f, indent=4)
 
 
 if __name__ == "__main__":
-    tyro.cli(main)
+    tyro.cli(main, config=(tyro.conf.CascadeSubcommandArgs,))

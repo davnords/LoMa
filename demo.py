@@ -9,12 +9,12 @@ from loma.loma import LoMaB, LoMaConfig, filter_matches, to_pixel_coords
 
 
 def main(
-    cfg: LoMaConfig = LoMaB(),
+    matcher: LoMaConfig = LoMaB(),
     im_A: str = "assets/toronto_A.jpg",
     im_B: str = "assets/toronto_B.jpg",
     save_path: str = "demo/matches.jpg",
 ):
-    model = LoMa(cfg)
+    model = LoMa(matcher)
 
     # NOTE: you could simply call kptsA, kptsB = model.match(im_A, im_B)
     # Here we unpack the internals to see what's happening:

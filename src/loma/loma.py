@@ -1,11 +1,13 @@
 from dataclasses import dataclass
 import math
-from typing import Callable, Literal, Tuple
+import re
+from typing import Annotated, Callable, Literal, Tuple
 import numpy as np
 from PIL import Image
 
 import torch
 import torch.nn.functional as F
+import tyro
 from torch import nn
 
 from loma.types import Model, Batch
@@ -240,7 +242,6 @@ class LoMa(Model):
         input_dim: int = 256
         embed_dim: int = 256
         n_layers: int = 9
-        n_layers_inference: int = 9
         num_heads: int = 4
         filter_threshold: float = 0.1
         mp: bool = True
@@ -293,13 +294,10 @@ class LoMa(Model):
             )
 
         self.transformers = nn.ModuleList(
-            [
-                TransformerLayer(cfg.embed_dim, cfg.num_heads)
-                for _ in range(cfg.n_layers_inference)
-            ]
+            [TransformerLayer(cfg.embed_dim, cfg.num_heads) for _ in range(cfg.n_layers)]
         )
         self.log_assignment = nn.ModuleList(
-            [MatchAssignment(cfg.embed_dim) for _ in range(cfg.n_layers_inference)]
+            [MatchAssignment(cfg.embed_dim) for _ in range(cfg.n_layers)]
         )
 
         self._detector = DaD().eval()
@@ -321,8 +319,15 @@ class LoMa(Model):
             )
             missing_keys, unexpected_keys = self.load_state_dict(weights, strict=False)
             if len(unexpected_keys) > 0:
-                assert cfg.n_layers > cfg.n_layers_inference, (
-                    f"Unexpected keys when loading pretrained weights: {unexpected_keys}"
+                allowed_extra_layer_keys = {
+                    key
+                    for key in unexpected_keys
+                    if self._is_unexpected_extra_layer_key(key, cfg.n_layers)
+                }
+                disallowed_keys = sorted(set(unexpected_keys) - allowed_extra_layer_keys)
+                assert len(disallowed_keys) == 0, (
+                    "Unexpected keys when loading pretrained weights "
+                    f"(not extra layers beyond n_layers={cfg.n_layers}): {disallowed_keys}"
                 )
             assert len(missing_keys) == 0, (
                 f"Missing keys when loading pretrained weights: {missing_keys}"
@@ -334,9 +339,13 @@ class LoMa(Model):
             self._detector.compile()
             self._descriptor.compile()
             pass
-        self.num_layers_inference = (
-            cfg.n_layers_inference
-        )  # Change if you want a faster model
+    @staticmethod
+    def _is_unexpected_extra_layer_key(key: str, n_layers: int) -> bool:
+        match = re.match(r"^(transformers|log_assignment)\.(\d+)\.", key)
+        if match is None:
+            return False
+        layer_idx = int(match.group(2))
+        return layer_idx >= n_layers
 
     @torch.inference_mode()
     def detect(self, batch: Batch, num_keypoints: int | None = None) -> dict:
@@ -376,9 +385,9 @@ class LoMa(Model):
             encoding0 = self.posenc(kpts0)
             encoding1 = self.posenc(kpts1)
             scores = None
-            for i in range(self.num_layers_inference):
+            for i in range(self.cfg.n_layers):
                 desc0, desc1 = self.transformers[i](desc0, desc1, encoding0, encoding1)
-                scores, _ = self.log_assignment[i](desc0, desc1)
+            scores, _ = self.log_assignment[i](desc0, desc1)
             assert scores is not None
 
         return {
@@ -496,25 +505,10 @@ class LoMaG(LoMa.Cfg):
 
 LoMaName = Literal["loma_B128", "loma_B", "loma_L", "loma_G"]
 # Accept either a raw LoMa.Cfg instance or a named preset.
-LoMaConfig = LoMaB128 | LoMaB | LoMaL | LoMaG | LoMa.Cfg
-
-
-# def _config_from_name(name: LoMaName) -> LoMaPresetConfig:
-#     if name == "loma_B128":
-#         return LoMaB128Config()
-#     if name == "loma_B":
-#         return LoMaBConfig()
-#     if name == "loma_L":
-#         return LoMaLConfig()
-#     if name == "loma_G":
-#         return LoMaGConfig()
-#     raise ValueError(f"Model {name} not supported")
-
-
-# def create_model(name_or_config: LoMaConfig = "loma_B") -> LoMa:
-#     if isinstance(name_or_config, str):
-#         cfg = _config_from_name(name_or_config)
-#     else:
-#         cfg = name_or_config
-
-#     return LoMa(cfg)
+LoMaConfig = (
+    Annotated[LoMaB128, tyro.conf.subcommand("loma_b128")]
+    | Annotated[LoMaB, tyro.conf.subcommand("loma_b")]
+    | Annotated[LoMaL, tyro.conf.subcommand("loma_l")]
+    | Annotated[LoMaG, tyro.conf.subcommand("loma_g")]
+    | Annotated[LoMa.Cfg, tyro.conf.subcommand("loma_custom")]
+)
