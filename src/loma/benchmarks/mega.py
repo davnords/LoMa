@@ -87,13 +87,13 @@ class MegaDepthPoseEstimationBenchmark:
                         )
                         e_t, e_R = compute_pose_error(R_est, t_est[:, 0], R, t)
                         e_pose = max(e_t, e_R)
-                        tot_e_t.append(e_t)
-                        tot_e_R.append(e_R)
-                        tot_e_pose.append(e_pose)
                     except Exception as e:
                         logger.debug(f"Pose estimation error: {e}")
                         e_t, e_R = 90, 90
                         e_pose = max(e_t, e_R)
+                    tot_e_t.append(e_t)
+                    tot_e_R.append(e_R)
+                    tot_e_pose.append(e_pose)
 
                 pbar.set_postfix(
                     auc=f"{[f'{a.item():.3f}' for a in pose_auc(tot_e_pose, thresholds)]}"

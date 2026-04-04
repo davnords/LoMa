@@ -4,3 +4,4 @@ __pycache__/
 *.pt
 wandb/
 data/
+.WxBS

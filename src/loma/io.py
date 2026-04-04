@@ -7,8 +7,7 @@ def numpy_to_pil(x: np.ndarray):
     assert x.dtype in [np.float32, np.uint8]
     if x.dtype == np.float32:
         assert x.min() >= 0.0 and x.max() <= 1.0
-        x *= 255
-        x = x.astype(np.uint8)
+        x = (x * 255).astype(np.uint8)
     return Image.fromarray(x)
 
 

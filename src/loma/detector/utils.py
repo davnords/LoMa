@@ -8,7 +8,6 @@ from PIL import Image
 import numpy as np
 import cv2
 
-from loma.device import device
 from loma.io import tensor_to_pil
 from loma.geometry import kde, get_normalized_grid
 from loma.types import Detector
@@ -31,7 +30,6 @@ def extract_patches_from_inds(x: torch.Tensor, inds: torch.Tensor, patch_size: i
 def sample_keypoints(
     keypoint_probs: torch.Tensor,
     num_samples=8192,
-    device=device,
     use_nms=True,
     nms_size=1,
     sample_topk=True,
@@ -187,7 +185,7 @@ def visualize_keypoints(img_path, vis_path, detector: Detector, num_keypoints: i
     kps = detector.to_pixel_coords(kps, H, W)
     (vis_path).parent.mkdir(parents=True, exist_ok=True)
     Image.fromarray(draw_kpts(img, kps[0])).save(vis_path)
-    if detections["dense_probs"] is not None:
+    if detections.get("dense_probs") is not None:
         tensor_to_pil(detections["dense_probs"].squeeze().cpu(), autoscale=True).save(
             vis_path.as_posix().replace(".png", "_dense_probs.png")
         )

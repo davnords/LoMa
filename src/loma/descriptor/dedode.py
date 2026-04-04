@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class DeDoDeDescriptor(Model):
     @dataclass(frozen=True)
     class Cfg:
-        arch: Literal["dedode_b", "dedode_g", "dedode_dinov3"] = "dedode_b"
+        arch: Literal["dedode_b", "dedode_g"] = "dedode_b"
         compile: bool = True
         descriptor_dim: int = 256
         hidden_blocks: int = 5
@@ -96,6 +96,8 @@ class DeDoDeDescriptor(Model):
         keypoints: torch.Tensor,
     ):
         self.train(False)
+        images = images.to(device)
+        keypoints = keypoints.to(device)
         # TODO is this compile error //je ?
         description_grid = self(images)
         described_keypoints = F.grid_sample(
@@ -304,41 +306,6 @@ class VGG_DINOv2(nn.Module):
         feats_vgg, sizes_vgg = self.vgg(x)
         feat_dinov2, size_dinov2 = self.frozen_dinov2(x)
         return feats_vgg + feat_dinov2, sizes_vgg + size_dinov2
-
-
-class FrozenDINOv3(nn.Module):
-    def __init__(self, *, amp: bool, amp_dtype: torch.dtype):
-        super().__init__()
-        from loma.features import Descriptor
-
-        cfg = Descriptor.Cfg(
-            name="dinov3_vitl16",
-            enable_amp=amp,
-            frozen=True,
-            normalize_feats=False,
-            layer_idx=[23],
-        )
-        self.dinov3 = Descriptor(cfg)
-        self.amp_dtype = amp_dtype
-
-    def forward(self, x):
-        B, C, H, W = x.shape
-        features = self.dinov3(x.to(self.amp_dtype))[0]
-        features = features.permute(0, 3, 1, 2).reshape(B, 1024, H // 16, W // 16)
-        return [features], [(H // 16, W // 16)]
-
-
-class VGG_DINOv3(nn.Module):
-    def __init__(self, vgg_kwargs=None, dinov3_kwargs=None):
-        assert vgg_kwargs is not None and dinov3_kwargs is not None, "Input kwargs pls"
-        super().__init__()
-        self.vgg = VGG(**vgg_kwargs)
-        self.frozen_dinov3 = FrozenDINOv3(**dinov3_kwargs)
-
-    def forward(self, x):
-        feats_vgg, sizes_vgg = self.vgg(x)
-        feat_dinov3, size_dinov3 = self.frozen_dinov3(x)
-        return feats_vgg + feat_dinov3, sizes_vgg + size_dinov3
 
 
 def dedode_descriptor_B(descriptor_dim: int, hidden_blocks: int = 5):

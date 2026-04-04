@@ -116,7 +116,11 @@ class DaD(Model):
         return logits.float()
 
     def forward(
-        self, images: torch.Tensor, num_keypoints: int
+        self,
+        images: torch.Tensor,
+        num_keypoints: int,
+        *,
+        return_dense_probs: bool = False,
     ) -> dict[str, torch.Tensor]:
         scoremap = self.forward_impl(images)
         B, K, H, W = scoremap.shape
@@ -146,6 +150,8 @@ class DaD(Model):
             scoremap=scoremap.reshape(B, H, W),
         )
         result = {"keypoints": keypoints, "keypoint_probs": confidence}
+        if return_dense_probs:
+            result["dense_probs"] = dense_probs
         return result
 
     @torch.inference_mode()
@@ -157,8 +163,8 @@ class DaD(Model):
         return_dense_probs: bool = False,
     ) -> dict[str, torch.Tensor]:
         self.train(False)
-        images = _images_from_detector_input(batch)
-        return self(images, num_keypoints)
+        images = _images_from_detector_input(batch).to(device)
+        return self(images, num_keypoints, return_dense_probs=return_dense_probs)
 
     def load_image(self, im_path, device=device) -> torch.Tensor:
         pil_im = Image.open(im_path)
@@ -271,7 +277,6 @@ class ConvRefiner(nn.Module):
                 for hb in range(hidden_blocks)
             ]
         )
-        self.hidden_blocks = self.hidden_blocks
         self.out_conv = nn.Conv2d(hidden_dim, out_dim, 1, 1, 0)
         self.amp = amp
         self.amp_dtype = amp_dtype

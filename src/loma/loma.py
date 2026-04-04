@@ -342,8 +342,10 @@ class LoMa(Model):
         with torch.autocast(
             enabled=self.cfg.mp, dtype=amp_dtype, device_type=device.type
         ):
-            desc0 = desc0.detach().contiguous()
-            desc1 = desc1.detach().contiguous()
+            kpts0 = kpts0.to(device)
+            kpts1 = kpts1.to(device)
+            desc0 = desc0.to(device).detach().contiguous()
+            desc1 = desc1.to(device).detach().contiguous()
             desc0 = self.input_proj(desc0)
             desc1 = self.input_proj(desc1)
 
@@ -380,6 +382,7 @@ class LoMa(Model):
             )["descriptions"]
             w, h = Image.open(image).size
         else:
+            image = image.to(device)
             batch = {"image": image}
             keypoints = self._detector.detect(batch, num_keypoints=num_keypoints)[
                 "keypoints"

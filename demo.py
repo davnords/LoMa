@@ -34,7 +34,7 @@ if __name__ == "__main__":
     draw = ImageDraw.Draw(canvas)
     rng = np.random.default_rng(0)
     for (x1, y1), (x2, y2) in zip(matched_A, matched_B):
-        color = tuple(rng.integers(0, 255, 3).tolist())
+        color = tuple(rng.integers(0, 256, 3).tolist())
         draw.line([(x1, y1), (x2 + w1, y2)], fill=color, width=1)
 
     Path(args.save_path).parent.mkdir(parents=True, exist_ok=True)

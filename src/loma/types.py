@@ -47,7 +47,7 @@ class Batch:
                 data[k] = v.to(device)
             else:
                 data[k] = v
-        return Batch(**data)
+        return type(self)(**data)
 
     def swap_AB(self) -> Batch:
         """Return a "reversed" batch (B->A) useful for symmetric GT computation."""
@@ -98,9 +98,9 @@ class Model(nn.Module):
 
 Quality = Literal["high", "low"]
 GTSource = Literal["depth", "flow", "sparse"]
-DescriptorName = Literal["dinov3_vitl16", "dinov2_vitl14", "mum_vitl16", "flux2"]
+DescriptorName = Literal["dinov2_vitl14"]
 Normalizer = Literal["imagenet", "inception"]
-FineFeaturesType = Literal["vgg19", "vgg19bn"]
+FineFeaturesType = Literal["vgg19bn"]
 MAX_NUM_SPARSE_CORRESP = 64
 
 

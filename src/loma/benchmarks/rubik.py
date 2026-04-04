@@ -1,3 +1,4 @@
+import ast
 import json
 import cv2
 import numpy as np
@@ -59,7 +60,7 @@ class RubikBenchmark:
                 if data[box].get(scene) is None:
                     continue
 
-                pairs = [eval(el) for el in list(data[box][scene].keys())]
+                pairs = [ast.literal_eval(el) for el in list(data[box][scene].keys())]
                 paths = [
                     [
                         osp.join(

@@ -26,22 +26,6 @@ class VGG(nn.Module):
                 x = layer(x)
             return feats
 
-
-class VGG19(VGG):
-    def __init__(self, patch_size: int) -> None:
-        super().__init__()
-        if patch_size not in [8]:
-            raise NotImplementedError(
-                f"VGG19 is not supported for patch size {patch_size}"
-            )
-        last_layer = {8: 28}[patch_size]
-        self.layers = nn.ModuleList(
-            models.vgg19(weights=models.VGG19_Weights.IMAGENET1K_V1).features[
-                :last_layer
-            ]
-        )
-
-
 class VGG19BN(VGG):
     def __init__(self, patch_size: int) -> None:
         super().__init__()
@@ -61,8 +45,6 @@ class FineFeatures(nn.Module):
 
     def __new__(cls, cfg: Cfg):
         match cfg.type:
-            case "vgg19":
-                return VGG19(cfg.patch_size)
             case "vgg19bn":
                 return VGG19BN(cfg.patch_size)
             case _:
