@@ -78,7 +78,7 @@ def wrap_model(
 class VGG(nn.Module):
     def forward(self, x):
         x = imagenet(x)
-        with torch.autocast(device_type="cuda", enabled=True, dtype=amp_dtype):
+        with torch.autocast(device_type=device.type, enabled=True, dtype=amp_dtype):
             feats = {}
             scale = 1
             for layer in self.layers:

@@ -397,22 +397,26 @@ def create_model(name: Literal["loma_B128", "loma_B", "loma_L", "loma_G"]) -> Lo
     if name == "loma_B128":
         cfg = LoMa.Cfg(input_dim=128, descriptor="dedode_b")
         weights = torch.hub.load_state_dict_from_url(
-            "https://github.com/davnords/storage/releases/download/loma/loma_B128.pth"
+            "https://github.com/davnords/storage/releases/download/loma/loma_B128.pth",
+            map_location = device,
         )
     elif name == "loma_B":
         cfg = LoMa.Cfg(embed_dim=256, num_heads=4, descriptor="dedode_g")
         weights = torch.hub.load_state_dict_from_url(
-            "https://github.com/davnords/storage/releases/download/loma/loma_B.pt"
+            "https://github.com/davnords/storage/releases/download/loma/loma_B.pt",
+            map_location = device,
         )
     elif name == "loma_L":
         cfg = LoMa.Cfg(embed_dim=512, num_heads=8, descriptor="dedode_g")
         weights = torch.hub.load_state_dict_from_url(
-            "https://github.com/davnords/storage/releases/download/loma/loma_L.pth"
+            "https://github.com/davnords/storage/releases/download/loma/loma_L.pth",
+            map_location=device,
         )
     elif name == "loma_G":
         cfg = LoMa.Cfg(embed_dim=1024, num_heads=16, descriptor="dedode_g")
         weights = torch.hub.load_state_dict_from_url(
-            "https://github.com/davnords/storage/releases/download/loma/loma_G.pth"
+            "https://github.com/davnords/storage/releases/download/loma/loma_G.pth",
+            map_location=device,
         )
     else:
         raise ValueError(f"Model {name} not supported")
