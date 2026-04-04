@@ -1,1 +1,1 @@
-from .dedode import DeDoDeDescriptor
+from .dedode import DeDoDeDescriptor as DeDoDeDescriptor

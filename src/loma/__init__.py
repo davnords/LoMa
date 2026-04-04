@@ -1,1 +1,1 @@
-from .loma import LoMa, create_model
+from .loma import LoMa as LoMa, create_model as create_model

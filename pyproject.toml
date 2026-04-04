@@ -32,3 +32,18 @@ dev = [
     "ruff",
     "pyright",
 ]
+
+[tool.pyright]
+include = ["src"]
+pythonVersion = "3.10"
+# Optional imports (benchmark extras, poselib, etc.) are not always present in the dev env.
+reportMissingImports = "none"
+typeCheckingMode = "basic"
+# Incomplete stubs for nn.Module indexing and dynamic third-party attributes.
+reportIndexIssue = "none"
+reportAttributeAccessIssue = "none"
+# torchvision / vendor ViT: call signatures and general iteration on Module do not match stubs.
+reportCallIssue = "none"
+reportGeneralTypeIssues = "none"
+reportArgumentType = "none"
+reportReturnType = "none"

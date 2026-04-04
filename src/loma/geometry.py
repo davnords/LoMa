@@ -68,7 +68,7 @@ def _pixel_warp_and_depth_from_depth(
     K_A: torch.Tensor,
     K_B: torch.Tensor,
     T_AB: torch.Tensor,
-) -> torch.Tensor:
+) -> tuple[torch.Tensor, torch.Tensor]:
     homog_pixel_coords_A = to_homogeneous(pixel_coords_A)
     x = einsum(
         homog_pixel_coords_A,
@@ -252,13 +252,18 @@ def bhwc_interpolate(
     align_corners: bool | None = None,
     antialias: bool | None = None,
 ) -> torch.Tensor:
-    return F.interpolate(
-        x.permute(0, 3, 1, 2),
-        size=size,
-        mode=mode,
-        align_corners=align_corners,
-        antialias=antialias,
-    ).permute(0, 2, 3, 1)
+    x_chw = x.permute(0, 3, 1, 2)
+    if align_corners is not None and antialias is not None:
+        y = F.interpolate(
+            x_chw, size=size, mode=mode, align_corners=align_corners, antialias=antialias
+        )
+    elif align_corners is not None:
+        y = F.interpolate(x_chw, size=size, mode=mode, align_corners=align_corners)
+    elif antialias is not None:
+        y = F.interpolate(x_chw, size=size, mode=mode, antialias=antialias)
+    else:
+        y = F.interpolate(x_chw, size=size, mode=mode)
+    return y.permute(0, 2, 3, 1)
 
 
 def bhwc_interpolate_with_nearest_exact_fallback(
@@ -536,6 +541,10 @@ def compute_gt_warp_from_batch(
     warp_flow_src_AB = result_flow.warp
     valid_flow_src = result_flow.valid
     error_flow_src = result_flow.error
+    assert overlap_flow_src is not None and overlap_depth_src is not None
+    assert warp_flow_src_AB is not None and warp_depth_src_AB is not None
+    assert valid_flow_src is not None and valid_depth_src is not None
+    assert error_flow_src is not None and error_depth_src is not None
 
     covis = torch.zeros((B, H_A, W_A, 1), dtype=torch.float32, device=device)
     covis[is_flow_source] = overlap_flow_src.float()
@@ -599,7 +608,8 @@ def compute_pose_inliers_cv2_ransac(
     K1: np.ndarray,
     norm_thresh: float,
     conf: float = 0.99999,
-):
+) -> tuple[float, tuple[np.ndarray, np.ndarray, np.ndarray]] | None:
+    """Inlier ratio and best pose from the same RANSAC/E hypothesis as `estimate_pose_cv2_ransac`."""
     import cv2
 
     if len(kpts0) < 5:
@@ -613,16 +623,18 @@ def compute_pose_inliers_cv2_ransac(
         kpts0, kpts1, np.eye(3), threshold=norm_thresh, prob=conf
     )
 
-    ret = None
-    if E is not None:
-        best_num_inliers = 0
+    if E is None:
+        return None
+    best_num_inliers = 0
+    ret: tuple[np.ndarray, np.ndarray, np.ndarray] | None = None
 
-        for _E in np.split(E, len(E) // 3):
-            n, R, t, _ = cv2.recoverPose(_E, kpts0, kpts1, np.eye(3), 1e9, mask=mask)  # type: ignore
-            if n > best_num_inliers:
-                best_num_inliers = n
-                ret = (R, t, mask.ravel() > 0)
-    return best_num_inliers / len(kpts0)
+    for _E in np.split(E, len(E) // 3):
+        n, R, t, _ = cv2.recoverPose(_E, kpts0, kpts1, np.eye(3), 1e9, mask=mask)  # type: ignore
+        if n > best_num_inliers:
+            best_num_inliers = n
+            ret = (R, t, mask.ravel() > 0)
+    assert ret is not None
+    return (best_num_inliers / len(kpts0), ret)
 
 def estimate_pose_essential(
     kps_A: np.ndarray,

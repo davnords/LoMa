@@ -111,6 +111,8 @@ def sample_keypoints(
         )
     kps = torch.gather(grid, dim=1, index=inds[..., None].expand(B, num_samples, 2))
     if subpixel:
+        if scoremap is None:
+            raise ValueError("scoremap is required when subpixel=True")
         offsets = get_normalized_grid(
             B, nms_size, nms_size, overload_device=device
         ).reshape(B, nms_size**2, 2)  # B x K_H x K_W x 2

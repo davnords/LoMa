@@ -10,7 +10,7 @@ import torchvision.models as tvm
 from PIL import Image
 
 from loma.device import device, amp_dtype
-from loma.types import Batch, Model
+from loma.types import Model
 
 logger = logging.getLogger(__name__)
 
@@ -117,8 +117,8 @@ class DeDoDeDescriptor(Model):
         )
 
     def describe_keypoints_from_path(self, im_path, keypoints, H=784, W=784):
-        batch = {"image": self.read_image(im_path, H=H, W=W)}
-        return self.describe_keypoints(batch, keypoints)
+        images = self.read_image(im_path, H=H, W=W)
+        return self.describe_keypoints(images, keypoints)
 
 
 class Decoder(nn.Module):

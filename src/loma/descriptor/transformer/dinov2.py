@@ -10,7 +10,6 @@
 
 from functools import partial
 import math
-import logging
 from typing import Sequence, Tuple, Union, Callable
 
 import torch

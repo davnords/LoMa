@@ -1,6 +1,6 @@
 from dataclasses import dataclass
 import math
-from typing import Callable, List, Literal, Tuple
+from typing import Callable, Literal, Tuple
 import numpy as np
 from PIL import Image
 
@@ -29,13 +29,13 @@ def to_pixel_coords(flow, h1, w1):
                 w1 * (flow[..., 0] + 1) / 2,
                 h1 * (flow[..., 1] + 1) / 2,
             ),
-            axis=-1,
+            dim=-1,
         )
     )
     return flow
 
 class LearnableFourierPositionalEncoding(nn.Module):
-    def __init__(self, M: int, dim: int, F_dim: int = None, *, gamma: float, posenc_dist: Literal["normal", "reciprocal"]) -> None:
+    def __init__(self, M: int, dim: int, F_dim: int | None = None, *, gamma: float, posenc_dist: Literal["normal", "reciprocal"]) -> None:
         super().__init__()
         F_dim = F_dim if F_dim is not None else dim
         self.gamma = gamma
@@ -50,7 +50,7 @@ class LearnableFourierPositionalEncoding(nn.Module):
         return emb.repeat_interleave(2, dim=-1)
 
 class FixedPosEnc(nn.Module):
-    def __init__(self, M: int, dim: int, F_dim: int = None, *, gamma: float, posenc_dist: Literal["normal", "reciprocal"]) -> None:
+    def __init__(self, M: int, dim: int, F_dim: int | None = None, *, gamma: float, posenc_dist: Literal["normal", "reciprocal"]) -> None:
         super().__init__()
         F_dim = F_dim if F_dim is not None else dim
         self.gamma = gamma
@@ -127,7 +127,7 @@ class CrossBlock(nn.Module):
     def map_(self, func: Callable, x0: torch.Tensor, x1: torch.Tensor):
         return func(x0), func(x1)
 
-    def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> List[torch.Tensor]:
+    def forward(self, x0: torch.Tensor, x1: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
         qk0, qk1 = self.map_(self.to_qk, x0, x1)
         v0, v1 = self.map_(self.to_v, x0, x1)
         qk0, qk1, v0, v1 = map(
@@ -277,7 +277,8 @@ class LoMa(Model):
     @torch.inference_mode()
     def describe(self, batch: Batch, keypoints: torch.Tensor) -> dict:
         """Describe keypoints using the frozen descriptor."""
-        return self._descriptor.describe_keypoints(batch, keypoints)
+        images = torch.cat([batch.img_A, batch.img_B], dim=0)
+        return self._descriptor.describe_keypoints(images, keypoints)
 
     def forward(
         self,
@@ -295,11 +296,17 @@ class LoMa(Model):
             desc0 = self.input_proj(desc0)
             desc1 = self.input_proj(desc1)
 
+            if self.posenc is None:
+                raise RuntimeError(
+                    "LoMa.forward requires posenc_type other than 'none'"
+                )
             encoding0 = self.posenc(kpts0)
             encoding1 = self.posenc(kpts1)
+            scores = None
             for i in range(self.num_layers_inference):
                 desc0, desc1 = self.transformers[i](desc0, desc1, encoding0, encoding1)
-            scores, _ = self.log_assignment[i](desc0, desc1)
+                scores, _ = self.log_assignment[i](desc0, desc1)
+            assert scores is not None
 
         return {
             "scores": scores,
@@ -314,13 +321,17 @@ class LoMa(Model):
         if num_keypoints is None:
             num_keypoints = self.cfg.num_keypoints
         if isinstance(image, str):
-            keypoints = self._detector.detect_from_path(image, num_keypoints=num_keypoints)
+            keypoints = self._detector.detect_from_path(
+                image, num_keypoints=num_keypoints
+            )["keypoints"]
             descriptions = self._descriptor.describe_keypoints_from_path(image, keypoints)["descriptions"]
             w, h = Image.open(image).size
         else:
             batch = {"image": image}
             keypoints = self._detector.detect(batch, num_keypoints=num_keypoints)["keypoints"]
-            descriptions = self._descriptor.describe_keypoints(batch, keypoints)["descriptions"]
+            descriptions = self._descriptor.describe_keypoints(batch["image"], keypoints)[
+                "descriptions"
+            ]
             h, w = image.shape[-2:]
         return keypoints, descriptions, h, w
 

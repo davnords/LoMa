@@ -18,6 +18,16 @@ import logging
 logger = logging.getLogger(__name__)
 
 
+def _images_from_detector_input(
+    batch: torch.Tensor | Batch | dict[str, torch.Tensor],
+) -> torch.Tensor:
+    if isinstance(batch, torch.Tensor):
+        return batch
+    if isinstance(batch, Batch):
+        return torch.cat([batch.img_A, batch.img_B], dim=0)
+    return batch["image"]
+
+
 class DaD(Model):
     @dataclass(frozen=True)
     class Cfg:
@@ -85,7 +95,7 @@ class DaD(Model):
     ):
         images = self.normalizer(images)
         features, sizes = self.encoder(images)
-        logits = 0
+        logits: torch.Tensor = images[:, :1].new_zeros(())
         context = None
         scales = ["8", "4", "2", "1"]
         for idx, (feature_map, scale) in enumerate(zip(reversed(features), scales)):
@@ -127,8 +137,12 @@ class DaD(Model):
             increase_coverage=self.increase_coverage,
             coverage_from_sparse=self.coverage_from_sparse,
             remove_borders=self.remove_borders,
-            coverage_pow=self.coverage_pow,
-            coverage_size=self.coverage_size,
+            coverage_pow=float(self.coverage_pow)
+            if self.coverage_pow is not None
+            else 0.5,
+            coverage_size=self.coverage_size
+            if self.coverage_size is not None
+            else 51,
             subpixel=self.subpixel,
             subpixel_temp=self.subpixel_temp,
             scoremap=scoremap.reshape(B, H, W),
@@ -138,13 +152,17 @@ class DaD(Model):
 
     @torch.inference_mode()
     def detect(
-        self, images: torch.Tensor, *, num_keypoints: int, return_dense_probs: bool=False
+        self,
+        batch: torch.Tensor | Batch | dict[str, torch.Tensor],
+        *,
+        num_keypoints: int,
+        return_dense_probs: bool = False,
     ) -> dict[str, torch.Tensor]:
         self.train(False)
-        keypoints = self(images, num_keypoints)["keypoints"]
-        return keypoints
+        images = _images_from_detector_input(batch)
+        return self(images, num_keypoints)
 
-    def load_image(self, im_path, device=device) -> dict[str, torch.Tensor]:
+    def load_image(self, im_path, device=device) -> torch.Tensor:
         pil_im = Image.open(im_path)
         check_not_i16(pil_im)
         pil_im = pil_im.convert("RGB")
@@ -159,7 +177,7 @@ class DaD(Model):
         standard_im = np.array(pil_im) / 255.0
         return torch.from_numpy(standard_im).permute(2, 0, 1).float().to(device)[None]
 
-    @torch.inference_mode
+    @torch.inference_mode()
     def detect_from_path(
         self,
         im_path: str | Path,
@@ -185,7 +203,7 @@ class DaD(Model):
                 w * (normalized_coords[..., 0] + 1) / 2,
                 h * (normalized_coords[..., 1] + 1) / 2,
             ),
-            axis=-1,
+            dim=-1,
         )
         return pixel_coords
 
@@ -199,7 +217,7 @@ class DaD(Model):
                 2 * (pixel_coords[..., 0]) / w - 1,
                 2 * (pixel_coords[..., 1]) / h - 1,
             ),
-            axis=-1,
+            dim=-1,
         )
         return normalized_coords
 

@@ -1,1 +1,1 @@
-from .dad import DaD
+from .dad import DaD as DaD

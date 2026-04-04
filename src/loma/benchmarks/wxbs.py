@@ -50,7 +50,7 @@ class WxBSBenchmark:
 
             try:
                 F, _ = cv2.findFundamentalMat(kpts1, kpts2, cv2.USAC_MAGSAC, 0.25, 0.999, 100000)
-            except:
+            except Exception:
                 F = np.array([[0.0, 0.0, 0.0],
                         [0.0, 0.0, -1.0],
                         [0.0, 1.0, 0.0]])

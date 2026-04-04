@@ -86,6 +86,7 @@ class RubikBenchmark:
                     # Estimate pose
                     K1 = np.array(data[box][scene][str(pairs[i])]["K1"])
                     K2 = np.array(data[box][scene][str(pairs[i])]["K2"])
+                    ret = None
                     if estimate_pose == "essential":
                         ret = self.estimate_pose_essential(mkpts1, mkpts2, K1, K2, 0.5)
 
@@ -202,8 +203,11 @@ class RubikBenchmark:
         # recover pose from E
         best_num_inliers = 0
         ret = None
-        for _E in np.split(E, len(E) / 3):
-            n, R, t, _ = cv2.recoverPose(_E, kpts0, kpts1, np.eye(3), 1e9, mask=mask)
+        for _E in np.split(E, len(E) // 3):
+            pose = cv2.recoverPose(_E, kpts0, kpts1, np.eye(3), 1e9, mask=mask)
+            n = int(pose[0])
+            R = pose[1]
+            t = pose[2]
             if n > best_num_inliers:
                 ret = (R, t[:, 0], mask.ravel() > 0)
                 best_num_inliers = n
@@ -236,8 +240,11 @@ class RubikBenchmark:
         # Recover pose from essential matrix
         best_num_inliers = 0
         ret = None
-        for _E in np.split(E, len(E) / 3):
-            n, R, t, _ = cv2.recoverPose(_E, kpts0, kpts1, np.eye(3), 1e9, mask=mask)
+        for _E in np.split(E, len(E) // 3):
+            pose = cv2.recoverPose(_E, kpts0, kpts1, np.eye(3), 1e9, mask=mask)
+            n = int(pose[0])
+            R = pose[1]
+            t = pose[2]
             if n > best_num_inliers:
                 ret = (R, t[:, 0], mask.ravel() > 0)
                 best_num_inliers = n
