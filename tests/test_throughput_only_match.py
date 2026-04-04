@@ -5,7 +5,7 @@ import torch
 from loma.device import device
 
 def test_throughput():    
-    model = LoMa(LoMa.Cfg(compile=False)).to(device)
+    model = LoMa(LoMa.Cfg(compile=True)).to(device)
     kpts_A = torch.randn(1, 2048, 2).to(device)
     kpts_B = torch.randn(1, 2048, 2).to(device)
     feats_A = torch.randn(1, 2048, 256).to(device)
