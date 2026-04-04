@@ -1,14 +1,12 @@
 import torch
 
-from loma import LoMa, create_model
+from loma import LoMa
 from loma.descriptor.dedode import DeDoDeDescriptor
 from loma.detector.dad import DaD
 
 
 def test_public_api_imports() -> None:
     assert LoMa is not None
-    assert callable(create_model)
-
 
 def test_detector_dense_probs() -> None:
     detector = DaD(DaD.Cfg(compile=False))

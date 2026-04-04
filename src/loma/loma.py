@@ -463,7 +463,9 @@ class LoMa(Model):
 @dataclass(frozen=True, kw_only=True)
 class LoMaB128(LoMa.Cfg):
     name: Literal["loma_B128"] = "loma_B128"
-    input_dim: int = 128
+    input_dim: Literal[128] = 128
+    embed_dim: Literal[256] = 256
+    num_heads: Literal[4] = 4
     descriptor: Literal["dedode_b"] = "dedode_b"
     weights_url: str = (
         "https://github.com/davnords/storage/releases/download/loma/loma_B128.pth"
@@ -473,8 +475,9 @@ class LoMaB128(LoMa.Cfg):
 @dataclass(frozen=True, kw_only=True)
 class LoMaB(LoMa.Cfg):
     name: Literal["loma_B"] = "loma_B"
-    embed_dim: int = 256
-    num_heads: int = 4
+    input_dim: Literal[256] = 256
+    embed_dim: Literal[256] = 256
+    num_heads: Literal[4] = 4
     descriptor: Literal["dedode_g"] = "dedode_g"
     weights_url: str = (
         "https://github.com/davnords/storage/releases/download/loma/loma_B.pt"
@@ -484,8 +487,9 @@ class LoMaB(LoMa.Cfg):
 @dataclass(frozen=True, kw_only=True)
 class LoMaL(LoMa.Cfg):
     name: Literal["loma_L"] = "loma_L"
-    embed_dim: int = 512
-    num_heads: int = 8
+    input_dim: Literal[256] = 256
+    embed_dim: Literal[512] = 512
+    num_heads: Literal[8] = 8
     descriptor: Literal["dedode_g"] = "dedode_g"
     weights_url: str = (
         "https://github.com/davnords/storage/releases/download/loma/loma_L.pth"
@@ -495,8 +499,9 @@ class LoMaL(LoMa.Cfg):
 @dataclass(frozen=True, kw_only=True)
 class LoMaG(LoMa.Cfg):
     name: Literal["loma_G"] = "loma_G"
-    embed_dim: int = 1024
-    num_heads: int = 16
+    input_dim: Literal[256] = 256
+    embed_dim: Literal[1024] = 1024
+    num_heads: Literal[16] = 16
     descriptor: Literal["dedode_g"] = "dedode_g"
     weights_url: str = (
         "https://github.com/davnords/storage/releases/download/loma/loma_G.pth"
