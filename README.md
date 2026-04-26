@@ -16,6 +16,9 @@
     <em>Performance on a difficult matching pair compared to LightGlue.</em>
 </p>
 
+# ⚠️ WARNING: This branch is under development. Use at your own discretion.
+Disclaimer: LoMa-Turbo is not tested on all the benchmarks. I tried it on MegaDepth and WxBS and it seemed to perform similarly to LoMa-B128. There is a speed benchmark script under `tests/test_throughput.py` where I tried running turbo. The speed is also similar to LoMa-B128 but might be optimized further.  
+
 ## Overview
 LoMa is a fast and accurate family of local feature matchers. It works similar to [LightGlue](https://github.com/cvg/LightGlue) but significantly improves matching robustness and accuracy across benchmarks, even outperforming [RoMa](https://github.com/Parskatt/RoMa) and [RoMa v2](https://github.com/Parskatt/RoMaV2) on the difficult [WxBS](https://arxiv.org/abs/1504.06603) benchmark. As LoMa leverages local keypoint descriptions, the models are perfect drop-in replacement in e.g. SfM and Visual Localization pipelines.
 
