@@ -21,7 +21,7 @@ LoMa is a fast and accurate family of local feature matchers. It works similar t
 
 ## Updates
 - [April 14, 2026] Rotation invariant LoMa released. The model, which we call LoMa-R, is great at aerial imagery (e.g. [SatAst](https://github.com/georg-bn/satast)). See the paper [Who Handles Orientation?](https://arxiv.org/abs/2604.11809) (CVPRW26) for more information.
-- [April 13, 2026] Integration available with [HLoc](https://github.com/davnords/Hierarchical-Localization) and [vismatch](https://github.com/gmberton/vismatch/pull/63).
+- [April 13, 2026] Integration available with [HLoc](https://github.com/davnords/Hierarchical-Localization) and [vismatch](https://github.com/gmberton/vismatch/pull/63). 
 - [April 6, 2026] LoMa inference code released. 
 
 ## How to Use
@@ -78,7 +78,8 @@ We an array of models: LoMA-{B, B128, L, G, R}. For most usecases LoMa-B, which 
 - [x] Release rotation invariant matcher.
 - [x] Integrate with [HLoc](https://github.com/cvg/Hierarchical-Localization?tab=readme-ov-file). See this [fork](https://github.com/davnords/Hierarchical-Localization).
 - [x] Integrate with [vismatch](https://github.com/gmberton/vismatch). See this [PR](https://github.com/gmberton/vismatch/pull/63).
-- [ ] Release a lightweight descriptor.
+- [x] Release a lightweight descriptor.
+- [ ] Integrate with [HLoc](https://github.com/cvg/Hierarchical-Localization?tab=readme-ov-file).
 - [ ] Provide training code.
 - [ ] Release HardMatch.
 

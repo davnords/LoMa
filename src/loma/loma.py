@@ -13,6 +13,7 @@ from loma.types import Model, Batch
 from loma.device import device, amp_dtype
 from loma.descriptor.dedode import DeDoDeDescriptor
 from loma.detector.dad import DaD
+from loma.detector.turbo import TurboDetector
 
 
 # Reference code from LightGlue: https://github.com/cvg/LightGlue/blob/main/lightglue/lightglue.py
@@ -228,7 +229,7 @@ class LoMa(Model):
         filter_threshold: float = 0.1
         mp: bool = True
         compile: bool = False
-        descriptor: Literal["dedode_b", "dedode_g"] = "dedode_b"
+        descriptor: Literal["dedode_b", "dedode_g", "turbo"] = "dedode_b"
         num_keypoints: int = 2048
         # Positional encoding config
         posenc_type: Literal["learnable", "fixed"] = "learnable"
@@ -278,19 +279,28 @@ class LoMa(Model):
             [MatchAssignment(cfg.embed_dim) for _ in range(cfg.n_layers)]
         )
 
-        self._detector = DaD(DaD.Cfg(compile=cfg.compile)).eval()
-        for p in self._detector.parameters():
-            p.requires_grad = False
-
-        self._descriptor = DeDoDeDescriptor(
-            DeDoDeDescriptor.Cfg(
-                arch=cfg.descriptor,
-                compile=cfg.compile,
-                descriptor_dim=cfg.input_dim,
-            )
-        ).eval()
-        for p in self._descriptor.parameters():
-            p.requires_grad = False
+        if cfg.descriptor == "turbo":
+            self._detector_descriptor: TurboDetector = TurboDetector(
+                TurboDetector.Cfg(compile=cfg.compile, descriptor_dim=cfg.input_dim)
+            ).eval()
+            for p in self._detector_descriptor.parameters():
+                p.requires_grad = False
+            self._detector = None
+            self._descriptor = None
+        else:
+            self._detector_descriptor = None
+            self._detector = DaD(DaD.Cfg(compile=cfg.compile)).eval()
+            for p in self._detector.parameters():
+                p.requires_grad = False
+            self._descriptor = DeDoDeDescriptor(
+                DeDoDeDescriptor.Cfg(
+                    arch=cfg.descriptor,
+                    compile=cfg.compile,
+                    descriptor_dim=cfg.input_dim,
+                )
+            ).eval()
+            for p in self._descriptor.parameters():
+                p.requires_grad = False
 
         self.to(device)
 
@@ -335,11 +345,17 @@ class LoMa(Model):
         """Detect keypoints using the frozen detector."""
         if num_keypoints is None:
             num_keypoints = self.cfg.num_keypoints
+        if self._detector_descriptor is not None:
+            return self._detector_descriptor.detect(batch, num_keypoints=num_keypoints)
+        assert self._detector is not None
         return self._detector.detect(batch, num_keypoints=num_keypoints)
 
     @torch.inference_mode()
     def describe(self, batch: Batch, keypoints: torch.Tensor) -> dict:
         """Describe keypoints using the frozen descriptor."""
+        if self._detector_descriptor is not None:
+            return self._detector_descriptor.describe_keypoints(batch, keypoints)
+        assert self._descriptor is not None
         images = torch.cat([batch.img_A, batch.img_B], dim=0)
         return self._descriptor.describe_keypoints(images, keypoints)
 
@@ -380,23 +396,24 @@ class LoMa(Model):
         """Returns (keypoints, descriptions, H, W) where H, W are the original image dimensions."""
         if num_keypoints is None:
             num_keypoints = self.cfg.num_keypoints
+        if self._detector_descriptor is not None:
+            if isinstance(image, str):
+                result = self._detector_descriptor.detect_and_describe_from_path(image, num_keypoints=num_keypoints)
+                w, h = Image.open(image).size
+            else:
+                result = self._detector_descriptor.detect_and_describe({"image": image.to(device)}, num_keypoints=num_keypoints)
+                h, w = image.shape[-2:]
+            return result["keypoints"], result["descriptions"], h, w
+        assert self._detector is not None and self._descriptor is not None
         if isinstance(image, str):
-            keypoints = self._detector.detect_from_path(
-                image, num_keypoints=num_keypoints
-            )["keypoints"]
-            descriptions = self._descriptor.describe_keypoints_from_path(
-                image, keypoints
-            )["descriptions"]
+            keypoints = self._detector.detect_from_path(image, num_keypoints=num_keypoints)["keypoints"]
+            descriptions = self._descriptor.describe_keypoints_from_path(image, keypoints)["descriptions"]
             w, h = Image.open(image).size
         else:
             image = image.to(device)
             batch = {"image": image}
-            keypoints = self._detector.detect(batch, num_keypoints=num_keypoints)[
-                "keypoints"
-            ]
-            descriptions = self._descriptor.describe_keypoints(
-                batch["image"], keypoints
-            )["descriptions"]
+            keypoints = self._detector.detect(batch, num_keypoints=num_keypoints)["keypoints"]
+            descriptions = self._descriptor.describe_keypoints(batch["image"], keypoints)["descriptions"]
             h, w = image.shape[-2:]
         return keypoints, descriptions, h, w
 
@@ -461,6 +478,17 @@ class LoMaB(LoMa.Cfg):
         "https://github.com/davnords/storage/releases/download/loma/loma_B.pt"
     )
 
+@dataclass(frozen=True, kw_only=True)
+class LoMaBturbo(LoMa.Cfg):
+    name: Literal["loma_B_turbo"] = "loma_B_turbo"
+    input_dim: Literal[256] = 256
+    embed_dim: Literal[256] = 256
+    num_heads: Literal[4] = 4
+    descriptor: Literal["turbo"] = "turbo"
+    weights_url: str = (
+        "https://github.com/davnords/storage/releases/download/lomaturbo/loma_B_turbo.pth"
+    )
+
 
 @dataclass(frozen=True, kw_only=True)
 class LoMaL(LoMa.Cfg):
@@ -496,4 +524,4 @@ class LoMaR(LoMa.Cfg):
         "https://github.com/davnords/storage/releases/download/loma/loma_R.pth"
     )
 
-LoMaName = Literal["loma_B128", "loma_B", "loma_L", "loma_G", "loma_R"]
+LoMaName = Literal["loma_B128", "loma_B", "loma_L", "loma_G", "loma_R", "loma_B_turbo"]
