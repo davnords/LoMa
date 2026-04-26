@@ -16,6 +16,9 @@
     <em>Performance on a difficult matching pair compared to LightGlue.</em>
 </p>
 
+# ⚠️ WARNING: This branch is under development. Use at your own discretion.
+Disclaimer: Training reproduction has not been validated but the code closely follows the original training code. To be cleaned up futher.
+
 ## Overview
 LoMa is a fast and accurate family of local feature matchers. It works similar to [LightGlue](https://github.com/cvg/LightGlue) but significantly improves matching robustness and accuracy across benchmarks, even outperforming [RoMa](https://github.com/Parskatt/RoMa) and [RoMa v2](https://github.com/Parskatt/RoMaV2) on the difficult [WxBS](https://arxiv.org/abs/1504.06603) benchmark. As LoMa leverages local keypoint descriptions, the models are perfect drop-in replacement in e.g. SfM and Visual Localization pipelines.
 
@@ -73,13 +76,33 @@ The results are similar to those reported in the paper. For example, running the
 ## Sizes
 We an array of models: LoMA-{B, B128, L, G, R}. For most usecases LoMa-B, which is the same size as LightGlue, works fine. LoMa-G is significantly heavier but gives the most accurate matches, even surpassing the RoMa-family on e.g. WxBS and IMC22. LoMa-R provides a rotation invariant matcher and descriptor (through data augmentation).
 
+## Training
+
+### Data
+We initially provide a training script on MegaDepth. We use the same standard data pre-processing as in [RoMa](https://github.com/Parskatt/RoMa) and [DKM](https://github.com/parskatt/dkm). The easiest way to obtain the data is to follow the instructions in those repos. We expect the data to be in the `data/` folder. If stored elsewhere, symlink it to there.
+
+The full LoMa model is trained on: [ScanNet++](https://github.com/scannetpp/scannetpp), [BlendedMVS](https://github.com/yoyo000/blendedmvs), [Map-Free](https://github.com/nianticlabs/map-free-reloc), [Hypersim](https://github.com/apple/ml-hypersim), [MegaScenes](https://megascenes.github.io/), [MegaDepth](https://github.com/zhengqili/MegaDepth), [AerialMD](https://github.com/kvuong2711/aerial-megadepth), [TartanAir v2](https://tartanair.org/), [Mapillary Planet-scale](https://www.mapillary.com/dataset/depth), [Aria Synthetic Environments](https://www.projectaria.com/datasets/ase/), [CO3Dv2](https://github.com/facebookresearch/co3d), [MegaSynth](https://hwjiang1510.github.io/MegaSynth/), [SpatialVID](https://github.com/NJU-3DV/SpatialVID), [FlyingThings3D](https://lmb.informatik.uni-freiburg.de/resources/datasets/SceneFlowDatasets.en.html), [UnrealStereo4k](https://huggingface.co/datasets/fabiotosi92/UnrealStereo4K), and [Virtual KITTI 2](https://europe.naverlabs.com/proxy-virtual-worlds-vkitti-2/).
+
+### Start
+LoMa is trained in two stages: (i) descriptor and (ii) matcher. To finetune LoMa, only the matcher needs to be trained. To train LoMa from scratch you should first train the descriptor:
+```bash
+uv run torchrun --nproc_per_node=8 train/descriptor.py --name loma-desc
+```
+Thereafter, you train the matcher on-top of your already trained descriptor:
+```bash
+uv run torchrun --nproc_per_node=8 train/matcher.py --name loma-match --model.descriptor_run_path <path to your descriptor run>
+```
+You can use `--help` on the training scripts to find the customizable parameters. The defaults are what we used to train LoMa-B. The training scripts support distributed training (including multi-node). Non-distributed training also works, simply run `uv run train/<script.py>`. However, this will not reproduce our results.
+
+To train LoMa-R you can simply turn on rotation data augmentation by adding the flag `--transform.rot360`. To train other sizes of LoMa simply change the embed dimension and number of heads. We use a constant head dimension of 64 and embed dimensions of 256, 512, and 1024 for LoMa-B, LoMa-L, and LoMa-G, respectively.
+
 ## Checklist
 - [x] Publish the inference code.
 - [x] Release rotation invariant matcher.
 - [x] Integrate with [HLoc](https://github.com/cvg/Hierarchical-Localization?tab=readme-ov-file). See this [fork](https://github.com/davnords/Hierarchical-Localization).
 - [x] Integrate with [vismatch](https://github.com/gmberton/vismatch). See this [PR](https://github.com/gmberton/vismatch/pull/63).
+- [x] Provide training code.
 - [ ] Release a lightweight descriptor.
-- [ ] Provide training code.
 - [ ] Release HardMatch.
 
 ## License

@@ -35,6 +35,10 @@ dev = [
     "ruff",
     "pyright",
 ]
+train = [
+    "wandb",
+    "h5py",
+]
 
 [tool.pyright]
 include = ["src"]

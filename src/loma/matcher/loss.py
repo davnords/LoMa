@@ -10,8 +10,6 @@ from loma.loma import LoMa
 from loma.types import Batch
 
 
-# NOTE: We include the loss function to provide some further information...
-# ...it is not used in the inference release
 class GlueLoss(nn.Module):
     @dataclass(frozen=True)
     class Cfg:
