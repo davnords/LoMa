@@ -1,0 +1,13 @@
+__pycache__/
+.venv/
+*.log
+*.pyc
+# exported models are large (some >100MB) → ship via GitHub Releases / Git LFS
+onnx/
+*.onnx
+*.onnx.data
+# build artifacts
+.ortbuild/
+cpp/build/
+cpp/.ortinc/
+cpp/.cvshim/

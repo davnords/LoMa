@@ -1,0 +1,5 @@
+@PACKAGE_INIT@
+include(CMakeFindDependencyMacro)
+find_dependency(OpenCV COMPONENTS core imgproc imgcodecs)
+include("${CMAKE_CURRENT_LIST_DIR}/LoMaTargets.cmake")
+check_required_components(LoMa)
