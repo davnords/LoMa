@@ -149,6 +149,19 @@ auto matches = model.match(imgA, imgB);    // std::vector<loma::Match>{a,b,score
 ```
 Build + integrate: see **[cpp/README.md](cpp/README.md)**.
 
+### COLMAP / SfM
+LoMa is the *matcher*, so it slots into COLMAP via the custom keypoints + imported
+matches path (no SIFT/NN step). [`cpp/examples/colmap_import.cpp`](cpp/examples/colmap_import.cpp)
+extracts keypoints and matches every image pair, then writes cameras, images,
+keypoints and raw matches straight into a COLMAP SQLite database (built when
+`libsqlite3-dev` is present):
+```bash
+./loma_colmap_import onnx scene.db img1.jpg img2.jpg img3.jpg --preset fast
+colmap matches_importer --database_path scene.db \
+       --match_list_path scene.db.matches.txt --match_type raw   # geometric verification
+colmap mapper --database_path scene.db --image_path imgs --output_path sparse
+```
+
 ---
 
 ## ONNX Runtime on GPU (aarch64 / Blackwell)

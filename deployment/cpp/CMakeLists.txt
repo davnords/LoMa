@@ -52,6 +52,16 @@ if(LOMA_BUILD_EXAMPLES)
   target_link_libraries(loma_match PRIVATE loma ${OpenCV_LIBS})
   add_executable(loma_bench examples/benchmark.cpp)
   target_link_libraries(loma_bench PRIVATE loma ${OpenCV_LIBS})
+
+  # COLMAP database importer — only built when SQLite3 is available.
+  find_package(SQLite3 QUIET)
+  if(SQLite3_FOUND)
+    add_executable(loma_colmap_import examples/colmap_import.cpp)
+    target_link_libraries(loma_colmap_import PRIVATE loma ${OpenCV_LIBS} SQLite::SQLite3)
+    message(STATUS "SQLite3 found — building loma_colmap_import")
+  else()
+    message(STATUS "SQLite3 not found — skipping loma_colmap_import (install libsqlite3-dev)")
+  endif()
 endif()
 
 # ---- install + find_package(LoMa) support ----
