@@ -46,6 +46,10 @@ int main(int argc, char** argv) {
   std::string dir = argv[1], pa = argv[2], pb = argv[3];
   std::string preset = argc > 4 ? argv[4] : "fast";
   int iters = argc > 5 ? std::stoi(argv[5]) : 50;
+  if (!kPresets.count(preset)) {
+    std::cerr << "unknown preset: " << preset << "\n";
+    return 1;
+  }
   const Preset p = kPresets.at(preset);
 
   loma::Options opt;

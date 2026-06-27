@@ -138,6 +138,16 @@ struct LoMa::Impl {
                                          detector.out_names.size());
     int ki = outIndex(detector, "keypoints");
     int pi = outIndex(detector, "keypoint_probs");
+    const auto kp_shape = det_out[ki].GetTensorTypeAndShapeInfo().GetShape();
+    const auto pr_shape = det_out[pi].GetTensorTypeAndShapeInfo().GetShape();
+    if (kp_shape.size() != 3 || kp_shape[0] != 1 || kp_shape[2] != 2)
+      throw std::runtime_error("[loma] unexpected detector 'keypoints' shape");
+    if (pr_shape.size() != 2 || pr_shape[0] != 1)
+      throw std::runtime_error("[loma] unexpected detector 'keypoint_probs' shape");
+    if (kp_shape[1] != N || pr_shape[1] != N)
+      throw std::runtime_error("[loma] Options.num_keypoints (" + std::to_string(N) +
+                               ") does not match detector output (" +
+                               std::to_string(kp_shape[1]) + ")");
     const float* kp = det_out[ki].GetTensorData<float>();
     const float* pr = det_out[pi].GetTensorData<float>();
     f.n = N;

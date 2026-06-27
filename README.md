@@ -74,8 +74,20 @@ The results are similar to those reported in the paper. For example, running the
 ## Sizes
 We an array of models: LoMA-{B, B128, L, G, R}. For most usecases LoMa-B, which is the same size as LightGlue, works fine. LoMa-G is significantly heavier but gives the most accurate matches, even surpassing the RoMa-family on e.g. WxBS and IMC22. LoMa-R provides a rotation invariant matcher and descriptor (through data augmentation).
 
+## Deployment (ONNX · C++ · Jetson / DGX-Spark)
+For edge and production use, [`deployment/`](deployment/) exports every variant
+(B, B128, R, L, G) to **ONNX** — detector + descriptor + matcher, each a single
+self-contained `.onnx`, validated against PyTorch (matchers agree 100% / 99.95%,
+descriptors cosine 1.0, end-to-end 99.5% of matches within 1 px). It also ships a
+reusable **C++ inference library** (ONNX Runtime CUDA→CPU fallback, `find_package(LoMa)`,
+3-line API), resolution/keypoint **presets** tuned for the **Jetson Orin Nano 8 GB**, a
+from-source `onnxruntime-gpu` build for the **DGX Spark GB10** (sm_121, CUDA 13), and
+on-device benchmarks. The PyTorch code in `src/loma/` is untouched. See
+[`deployment/README.md`](deployment/README.md) to get started.
+
 ## Checklist
 - [x] Publish the inference code.
+- [x] ONNX export + C++ / Jetson deployment. See [`deployment/`](deployment/).
 - [x] Release rotation invariant matcher.
 - [x] Integrate with [HLoc](https://github.com/cvg/Hierarchical-Localization?tab=readme-ov-file). See this [fork](https://github.com/davnords/Hierarchical-Localization).
 - [x] Integrate with [vismatch](https://github.com/gmberton/vismatch). See this [PR](https://github.com/gmberton/vismatch/pull/63).

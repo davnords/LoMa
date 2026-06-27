@@ -88,7 +88,9 @@ def main():
                     default=["pico", "nano", "turbo", "fast"])
     ap.add_argument("--iters", type=int, default=20)
     ap.add_argument("--warmup", type=int, default=8)
-    ap.add_argument("--out", default="jetson_bench.json")
+    ap.add_argument("--out", default="docs/jetson_benchmark.json")
+    ap.add_argument("--device", default="NVIDIA Jetson Orin Nano 8GB")
+    ap.add_argument("--variant", default="B128 / DeDoDe-B")
     args = ap.parse_args()
 
     print("onnxruntime", ort.__version__, "| available providers:",
@@ -138,14 +140,22 @@ def main():
         fps = 1000.0 / total
         print(f"{p:9}{H}x{W:<6}{D:>6}{K:>6} | "
               f"{t_det:>7.2f}m{t_dsc:>7.2f}m{t_mat:>7.2f}m{total:>8.1f}m{fps:>7.2f}{nmatch:>7}")
-        rows.append(dict(preset=p, H=H, W=W, desc=D, kpts=K,
-                         det_ms=round(t_det, 2), dsc_ms=round(t_dsc, 2),
-                         mat_ms=round(t_mat, 2), total_ms=round(total, 1),
+        # detect_ms/describe_ms store BOTH-image cost (x2), matching the schema
+        # consumed by jetson_charts.py and docs/jetson_benchmark.json.
+        rows.append(dict(name=p, H=H, W=W, desc=D, kpts=K,
+                         detect_ms=round(2 * t_det, 2), describe_ms=round(2 * t_dsc, 2),
+                         match_ms=round(t_mat, 2), total_ms=round(total, 1),
                          fps=round(fps, 2), matches=nmatch))
         del det, dsc  # free GPU memory between presets (Orin Nano 8GB)
 
+    out = dict(device=args.device, runtime=ort.__version__, variant=args.variant,
+               pair=f"{os.path.basename(args.imgA)}/{os.path.basename(args.imgB)}",
+               note="detect_ms/describe_ms are for BOTH images (x2). "
+                    "total = detect + describe + match.",
+               provider=used, rows=rows)
+    os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w") as f:
-        json.dump(dict(provider=used, runtime=ort.__version__, rows=rows), f, indent=2)
+        json.dump(out, f, indent=2)
     print(f"\nwrote {args.out}  | provider={used}")
 
 

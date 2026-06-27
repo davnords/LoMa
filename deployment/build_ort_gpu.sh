@@ -3,12 +3,13 @@
 # No prebuilt aarch64+CUDA13 wheel exists, so we compile one.
 set -euo pipefail
 
-REPO=/home/raman/Basir/LoMa
-SRC="$REPO/.ortbuild/onnxruntime"
-VENV_PY="$REPO/.venv/bin/python"
-ORT_VER="v1.24.4"
-CUDA_HOME="/usr/local/cuda"
-CUDNN_HOME="/usr"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO="${REPO:-$(cd "${SCRIPT_DIR}/.." && pwd)}"
+SRC="${SRC:-${REPO}/.ortbuild/onnxruntime}"
+VENV_PY="${VENV_PY:-${REPO}/.venv/bin/python}"
+ORT_VER="${ORT_VER:-v1.24.4}"
+CUDA_HOME="${CUDA_HOME:-/usr/local/cuda}"
+CUDNN_HOME="${CUDNN_HOME:-/usr}"
 
 echo "[ort] $(date) starting build of onnxruntime-gpu $ORT_VER for sm_121"
 mkdir -p "$REPO/.ortbuild"
@@ -46,7 +47,7 @@ WHEEL=$(ls -t "$SRC"/build/Linux/Release/dist/onnxruntime_gpu-*.whl | head -1)
 echo "[ort] wheel: $WHEEL"
 
 echo "[ort] installing wheel into venv (replaces CPU onnxruntime) ..."
-"$REPO/.venv/bin/pip" install --force-reinstall --no-deps "$WHEEL"
+"$VENV_PY" -m pip install --force-reinstall --no-deps "$WHEEL"
 
 echo "[ort] verifying providers ..."
 "$VENV_PY" - <<'PY'

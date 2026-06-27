@@ -349,6 +349,11 @@ def export_descriptor(model, arch, outdir, opset, im_b, n):
 
 def export_detector(model, outdir, opset, n, im_b, dynamic):
     log("== detector (DaD, shared) ==")
+    if dynamic:
+        raise NotImplementedError(
+            "--detector-dynamic is unsupported: dynamic batch hits `if B == 0` in "
+            "get_normalized_grid and dynamic H/W hits data-dependent guards. "
+            "Re-export per input size instead.")
     img = sample_image(model, im_b)
     path = os.path.join(outdir, "loma_detector.onnx")
     # Detector exports STATIC: dynamic batch hits `if B == 0` in get_normalized_grid,

@@ -43,7 +43,7 @@ target_include_directories(loma PUBLIC
   $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
   $<INSTALL_INTERFACE:include>)
 target_include_directories(loma PRIVATE ${ONNXRUNTIME_INCLUDE_DIR})
-target_link_libraries(loma PUBLIC ${OpenCV_LIBS} PRIVATE ${ONNXRUNTIME_LIB})
+target_link_libraries(loma PUBLIC ${OpenCV_LIBS} ${ONNXRUNTIME_LIB})
 set_target_properties(loma PROPERTIES VERSION ${PROJECT_VERSION} SOVERSION 1)
 
 # ---- examples ----
