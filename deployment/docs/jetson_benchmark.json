@@ -1,0 +1,16 @@
+{
+  "device": "NVIDIA Jetson Orin Nano 8GB",
+  "runtime": "onnxruntime 1.24.0 (CUDA EP) · JetPack 6.2 · CUDA 12.6 · cuDNN 9.3",
+  "variant": "B128 / DeDoDe-B",
+  "pair": "0015_A.jpg/0015_B.jpg",
+  "note": "det_ms/describe_ms are for BOTH images (x2). total = detect + describe + match. quality (1024px) OOMs the 8GB device under the CUDA EP.",
+  "rows": [
+    {"name": "pico",     "H": 256, "W": 256,  "desc": 256, "kpts": 512,  "detect_ms": 67.40,  "describe_ms": 120.48, "match_ms": 56.90,  "total_ms": 244.8,  "fps": 4.09, "matches": 282},
+    {"name": "nano",     "H": 256, "W": 256,  "desc": 256, "kpts": 1024, "detect_ms": 67.78,  "describe_ms": 120.84, "match_ms": 133.48, "total_ms": 322.1,  "fps": 3.10, "matches": 539},
+    {"name": "turbo",    "H": 384, "W": 384,  "desc": 384, "kpts": 1024, "detect_ms": 146.70, "describe_ms": 265.92, "match_ms": 132.79, "total_ms": 545.4,  "fps": 1.83, "matches": 562},
+    {"name": "fast",     "H": 512, "W": 512,  "desc": 512, "kpts": 1024, "detect_ms": 248.02, "describe_ms": 446.70, "match_ms": 133.37, "total_ms": 828.1,  "fps": 1.21, "matches": 555},
+    {"name": "balanced", "H": 640, "W": 640,  "desc": 640, "kpts": 1536, "detect_ms": 389.00, "describe_ms": 705.46, "match_ms": 244.25, "total_ms": 1338.7, "fps": 0.75, "matches": 798},
+    {"name": "wide",     "H": 512, "W": 1024, "desc": 512, "kpts": 2048, "detect_ms": 503.72, "describe_ms": 447.06, "match_ms": 341.04, "total_ms": 1291.8, "fps": 0.77, "matches": 1093},
+    {"name": "quality",  "H": 1024, "W": 1024, "desc": 784, "kpts": 2048, "oom": true}
+  ]
+}
