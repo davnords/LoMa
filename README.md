@@ -22,7 +22,7 @@ LoMa is a fast and accurate family of local feature matchers. It works similar t
 
 ## Updates
 - [June 27, 2026] An initial public release of HardMatch can be found [here](https://github.com/davnords/HardMatch).
-- [June 18, 2026] LoMa has been accepted to ECCV 2026 in Malmö as a Short Oral paper.
+- [June 18, 2026] LoMa has been accepted to ECCV 2026 in Malmö as an Oral paper (1.6%).
 - [April 14, 2026] Rotation invariant LoMa released. The model, which we call LoMa-R, is great at aerial imagery (e.g. [SatAst](https://github.com/georg-bn/satast)). See the paper [Who Handles Orientation?](https://arxiv.org/abs/2604.11809) (CVPRW26) for more information.
 - [April 13, 2026] Integration available with [HLoc](https://github.com/davnords/Hierarchical-Localization) and [vismatch](https://github.com/gmberton/vismatch/pull/63).
 - [April 6, 2026] LoMa inference code released. 
