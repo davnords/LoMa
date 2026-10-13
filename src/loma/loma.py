@@ -106,6 +106,8 @@ class SelfBlock(nn.Module):
         qkv = self.Wqkv(x)
         qkv = qkv.unflatten(-1, (self.num_heads, -1, 3)).transpose(1, 2)
         q, k, v = qkv[..., 0], qkv[..., 1], qkv[..., 2]
+        # v is a strided view (last-dim stride 3): SDPA would fall back to the math kernel
+        v = v.contiguous()
         # if encoding is not None:
         q = apply_cached_rotary_emb(encoding, q)
         k = apply_cached_rotary_emb(encoding, k)
