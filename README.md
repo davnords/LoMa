@@ -4,6 +4,7 @@
 
 <a href="https://arxiv.org/abs/2604.04931"><img src="https://img.shields.io/badge/arXiv-2604.04931-b31b1b" alt="arXiv"></a>
 <a href="https://www.davnords.com/loma"><img src="https://img.shields.io/badge/Project_Page-green" alt="Project Page"></a>
+<a href="https://github.com/davnords/HardMatch"><img src="https://img.shields.io/badge/HardMatch-Dataset-181717?logo=github" alt="HardMatch Dataset"></a>
 
 **Chalmers University of Technology**; **Linköping University**; **University of Amsterdam**; **Lund University**
 
@@ -23,6 +24,9 @@ Disclaimer: Training reproduction has not been validated but the code closely fo
 LoMa is a fast and accurate family of local feature matchers. It works similar to [LightGlue](https://github.com/cvg/LightGlue) but significantly improves matching robustness and accuracy across benchmarks, even outperforming [RoMa](https://github.com/Parskatt/RoMa) and [RoMa v2](https://github.com/Parskatt/RoMaV2) on the difficult [WxBS](https://arxiv.org/abs/1504.06603) benchmark. As LoMa leverages local keypoint descriptions, the models are perfect drop-in replacement in e.g. SfM and Visual Localization pipelines.
 
 ## Updates
+- [October 22, 2026] Thanks to a contribution by [TheGhoul21](https://github.com/TheGhoul21), LoMa is now faster for old PyTorch versions.
+- [June 27, 2026] An initial public release of HardMatch can be found [here](https://github.com/davnords/HardMatch).
+- [June 18, 2026] LoMa has been accepted to ECCV 2026 in Malmö as an Oral paper (1.6%).
 - [April 14, 2026] Rotation invariant LoMa released. The model, which we call LoMa-R, is great at aerial imagery (e.g. [SatAst](https://github.com/georg-bn/satast)). See the paper [Who Handles Orientation?](https://arxiv.org/abs/2604.11809) (CVPRW26) for more information.
 - [April 13, 2026] Integration available with [HLoc](https://github.com/davnords/Hierarchical-Localization) and [vismatch](https://github.com/gmberton/vismatch/pull/63).
 - [April 6, 2026] LoMa inference code released. 
@@ -76,6 +80,14 @@ The results are similar to those reported in the paper. For example, running the
 ## Sizes
 We an array of models: LoMA-{B, B128, L, G, R}. For most usecases LoMa-B, which is the same size as LightGlue, works fine. LoMa-G is significantly heavier but gives the most accurate matches, even surpassing the RoMa-family on e.g. WxBS and IMC22. LoMa-R provides a rotation invariant matcher and descriptor (through data augmentation).
 
+## Pretrained Weights
+The models should auto download as you initialize them. However, for those who prefer to directly download the weights we provide the links below.
+- **LoMa-B** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_B.pt)
+- **LoMa-B128** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_B128.pth)
+- **LoMa-L** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_L.pth)
+- **LoMa-G** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_G.pth)
+- **LoMa-R** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_R.pth)
+
 ## Training
 
 ### Data
@@ -102,8 +114,9 @@ To train LoMa-R you can simply turn on rotation data augmentation by adding the 
 - [x] Integrate with [HLoc](https://github.com/cvg/Hierarchical-Localization?tab=readme-ov-file). See this [fork](https://github.com/davnords/Hierarchical-Localization).
 - [x] Integrate with [vismatch](https://github.com/gmberton/vismatch). See this [PR](https://github.com/gmberton/vismatch/pull/63).
 - [x] Provide training code.
+- [x] Release HardMatch.
+- [ ] Merge training code into main branch.
 - [ ] Release a lightweight descriptor.
-- [ ] Release HardMatch.
 
 ## License
 All our code except the matcher, which inherits its license from LightGlue, is MIT license. LightGlue has an [Apache-2.0](https://github.com/cvg/LightGlue/blob/main/LICENSE) license.
@@ -114,14 +127,11 @@ Thanks to [Parskatt](https://github.com/Parskatt) for writing most of the code. 
 ## BibTeX
 If you find our models useful, please consider citing our papers!
 ```bibtex
-@misc{nordström2026lomalocalfeaturematching,
+@inproceedings{nordstrom2026loma,
       title={LoMa: Local Feature Matching Revisited}, 
       author={David Nordström and Johan Edstedt and Georg Bökman and Jonathan Astermark and Anders Heyden and Viktor Larsson and Mårten Wadenbäck and Michael Felsberg and Fredrik Kahl},
-      year={2026},
-      eprint={2604.04931},
-      archivePrefix={arXiv},
-      primaryClass={cs.CV},
-      url={https://arxiv.org/abs/2604.04931}, 
+      booktitle={Proceedings of the European Conference on Computer Vision (ECCV)},
+      year={2026}
 }
 
 @inproceedings{nordstrom2026who,
