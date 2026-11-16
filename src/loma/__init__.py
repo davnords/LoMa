@@ -8,4 +8,5 @@ from .loma import (
     AffineLoMaB as AffineLoMaB,
     AffineLoMaL as AffineLoMaL,
     AffineLoMaG as AffineLoMaG,
+    LoMaB64 as LoMaB64,
 )

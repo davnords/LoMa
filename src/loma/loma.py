@@ -268,6 +268,8 @@ class LoMa(Model):
         compile: bool = False
         affine: bool = False
         descriptor: Literal["dedode_b", "dedode_g"] = "dedode_b"
+        descriptor_vgg_size: Literal["11", "13", "19"] = "19"
+        descriptor_in1k_normalization: bool = False
         num_keypoints: int = 2048
         # Positional encoding config
         posenc_type: Literal["learnable", "fixed"] = "learnable"
@@ -329,6 +331,8 @@ class LoMa(Model):
                 arch=cfg.descriptor,
                 compile=cfg.compile,
                 descriptor_dim=cfg.input_dim,
+                vgg_size=cfg.descriptor_vgg_size,
+                in1k_normalization=cfg.descriptor_in1k_normalization,
             )
         ).eval()
         for p in self._descriptor.parameters():
@@ -497,6 +501,20 @@ class LoMaB128(LoMa.Cfg):
     descriptor: Literal["dedode_b"] = "dedode_b"
     weights_url: str = (
         "https://github.com/davnords/storage/releases/download/loma/loma_B128.pth"
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class LoMaB64(LoMa.Cfg):
+    name: Literal["loma_B64"] = "loma_B64"
+    input_dim: Literal[64] = 64
+    embed_dim: Literal[256] = 256
+    num_heads: Literal[4] = 4
+    descriptor: Literal["dedode_b"] = "dedode_b"
+    descriptor_vgg_size: Literal["11"] = "11"
+    descriptor_in1k_normalization: Literal[True] = True
+    weights_url: str = (
+        "https://github.com/davnords/storage/releases/download/loma/loma_B64.pth"
     )
 
 

@@ -10,6 +10,7 @@ import torchvision.models as tvm
 from PIL import Image
 
 from ..device import device, amp_dtype
+from ..normalizers import imagenet
 from ..types import Model, Batch
 
 logger = logging.getLogger(__name__)
@@ -22,13 +23,17 @@ class DeDoDeDescriptor(Model):
         compile: bool = True
         descriptor_dim: int = 256
         hidden_blocks: int = 5
+        vgg_size: Literal["11", "13", "19"] = "19"
+        in1k_normalization: bool = False
 
     def __init__(self, cfg: Cfg) -> None:
         super().__init__()
 
         if cfg.arch == "dedode_b":
             encoder, decoder = dedode_descriptor_B(
-                descriptor_dim=cfg.descriptor_dim, hidden_blocks=cfg.hidden_blocks
+                descriptor_dim=cfg.descriptor_dim,
+                hidden_blocks=cfg.hidden_blocks,
+                vgg_size=cfg.vgg_size,
             )
         elif cfg.arch == "dedode_g":
             encoder, decoder = dedode_descriptor_G(
@@ -79,6 +84,8 @@ class DeDoDeDescriptor(Model):
                 "Expected Batch or torch.Tensor, "
                 f"got {type(batch)}"
             )
+        if self.cfg.in1k_normalization:
+            images = imagenet(images)
         features, sizes = self.encoder(images)
         descriptions = 0
         context = None
@@ -317,7 +324,9 @@ class VGG_DINOv2(nn.Module):
         return feats_vgg + feat_dinov2, sizes_vgg + size_dinov2
 
 
-def dedode_descriptor_B(descriptor_dim: int, hidden_blocks: int = 5):
+def dedode_descriptor_B(
+    descriptor_dim: int, hidden_blocks: int = 5, vgg_size: str = "19"
+):
     amp = True
     conv_refiner = nn.ModuleDict(
         {
@@ -355,7 +364,7 @@ def dedode_descriptor_B(descriptor_dim: int, hidden_blocks: int = 5):
             ),
         }
     )
-    encoder = VGG(size="19", amp=amp, amp_dtype=amp_dtype)
+    encoder = VGG(size=vgg_size, amp=amp, amp_dtype=amp_dtype)
     decoder = Decoder(conv_refiner, descriptor_dim=descriptor_dim)
     return encoder, decoder
 
