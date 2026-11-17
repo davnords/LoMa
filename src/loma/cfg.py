@@ -4,6 +4,7 @@ import tyro
 from .loma import (
     LoMaB,
     LoMaB128,
+    LoMaB64,
     LoMaL,
     LoMaG,
     LoMaR,
@@ -17,6 +18,7 @@ from .loma import (
 LoMaConfig = (
     Annotated[LoMaB128, tyro.conf.subcommand("loma_b128")]
     | Annotated[LoMaB, tyro.conf.subcommand("loma_b")]
+    | Annotated[LoMaB64, tyro.conf.subcommand("loma_b64")]
     | Annotated[LoMaL, tyro.conf.subcommand("loma_l")]
     | Annotated[LoMaG, tyro.conf.subcommand("loma_g")]
     | Annotated[LoMaR, tyro.conf.subcommand("loma_r")]
