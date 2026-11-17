@@ -91,6 +91,22 @@ class DaD(Model):
         self,
         images,
     ):
+        # The encoder halves three times and the decoder upsamples back through the sizes it
+        # recorded. Those are floor-halvings, so a dimension that does not halve exactly makes an
+        # F.interpolate ratio non-integral, and with align_corners=False the score map lands off
+        # the pixel grid. Only the two finest levels move a keypoint measurably, so detections are
+        # biased by up to half a pixel whenever a dimension is not a multiple of 4.
+        #
+        # Pad the bottom-right up to a multiple of 4, then crop the score map back. Padding after
+        # the origin leaves the top-left alignment, and so every coordinate in the valid region,
+        # unchanged. A multiple of 8 would additionally make the coarsest halving exact; that was
+        # measured to move keypoints by 0.0025 px, so 4 is used as the smallest sufficient
+        # modulus.
+        unpadded_h, unpadded_w = images.shape[-2], images.shape[-1]
+        pad_h = (-unpadded_h) % 4
+        pad_w = (-unpadded_w) % 4
+        if pad_h or pad_w:
+            images = F.pad(images, (0, pad_w, 0, pad_h), mode="replicate")
         images = self.normalizer(images)
         features, sizes = self.encoder(images)
         logits: torch.Tensor = images[:, :1].new_zeros(())
@@ -111,6 +127,8 @@ class DaD(Model):
                 context = F.interpolate(
                     context.float(), size=size, mode="bilinear", align_corners=False
                 )
+        if pad_h or pad_w:
+            logits = logits[..., :unpadded_h, :unpadded_w]
         return logits.float()
 
     def forward(
