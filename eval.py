@@ -9,6 +9,7 @@ from loma.random import set_seed
 from loma.benchmarks import (
     Mega1500,
     ScanNet1500,
+    HPatchesAffine,
     RubikBenchmark,
     WxBSBenchmark,
 )
@@ -19,6 +20,7 @@ def main(
     benchmark: Literal[
         "mega1500",
         "scannet1500",
+        "hpatches_affine",
         "rubik",
         "wxbs",
     ] = "mega1500",
@@ -32,6 +34,9 @@ def main(
     elif benchmark == "scannet1500":
         scannet1500 = ScanNet1500()
         res = scannet1500.benchmark(model)
+        print(res)
+    elif benchmark == "hpatches_affine":
+        res = HPatchesAffine().benchmark(model)
         print(res)
     elif benchmark == "rubik":
         rubik = RubikBenchmark()

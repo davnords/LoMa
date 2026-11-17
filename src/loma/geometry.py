@@ -571,6 +571,21 @@ def compute_gt_warp_from_batch(
     return Warp(warp=warp, covis=covis, valid=valid, error=error)
 
 
+def gt_affine_at_matches(gt: Warp, kpts_A: torch.Tensor, mnn: torch.Tensor):
+    """GT affine (Jacobian of the warp, normalized coordinates) at the A-keypoint of each match, and whether it is well defined."""
+    B, H, W, _ = gt.warp.shape
+    d_x, d_y = torch.zeros_like(gt.warp), torch.zeros_like(gt.warp)
+    d_x[:, :, :-1] = (gt.warp[:, :, 1:] - gt.warp[:, :, :-1]) * (W / 2)
+    d_y[:, :-1] = (gt.warp[:, 1:] - gt.warp[:, :-1]) * (H / 2)
+    covis = gt.covis[..., 0] > 0
+    valid = torch.zeros_like(covis)
+    valid[:, :-1, :-1] = covis[:, :-1, :-1] & covis[:, 1:, :-1] & covis[:, :-1, 1:]
+    affine = bhwc_grid_sample(torch.stack((d_x, d_y), -1).reshape(B, H, W, 4), kpts_A[:, None])[:, 0]
+    valid = bhwc_grid_sample(valid[..., None].float(), kpts_A[:, None])[:, 0, :, 0]
+    b, i = mnn[:, 0], mnn[:, 1]
+    return affine[b, i].reshape(-1, 2, 2), valid[b, i] > 0.999
+
+
 # Code taken from https://github.com/PruneTruong/DenseMatching/blob/40c29a6b5c35e86b9509e65ab0cd12553d998e5f/validation/utils_pose_estimation.py
 # --- GEOMETRY ---
 def estimate_pose_cv2_ransac(

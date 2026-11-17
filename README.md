@@ -21,7 +21,9 @@
 LoMa is a fast and accurate family of local feature matchers. It works similar to [LightGlue](https://github.com/cvg/LightGlue) but significantly improves matching robustness and accuracy across benchmarks, even outperforming [RoMa](https://github.com/Parskatt/RoMa) and [RoMa v2](https://github.com/Parskatt/RoMaV2) on the difficult [WxBS](https://arxiv.org/abs/1504.06603) benchmark. As LoMa leverages local keypoint descriptions, the models are perfect drop-in replacement in e.g. SfM and Visual Localization pipelines.
 
 ## Updates
+- [November 17, 2026] We have extended LoMa to also predict affine correspondences, see the [paper](https://arxiv.org/abs/2611.18170v1), and released LoMaB64, using a faster and smaller descriptor.
 - [October 22, 2026] Thanks to a contribution by [TheGhoul21](https://github.com/TheGhoul21), LoMa is now faster for old PyTorch versions.
+- [September 26] Weights trained on only commercially licensed datasets have been released, find them [here](https://github.com/davnords/storage/releases/tag/loma).
 - [June 27, 2026] An initial public release of HardMatch can be found [here](https://github.com/davnords/HardMatch).
 - [June 18, 2026] LoMa has been accepted to ECCV 2026 in Malmö as an Oral paper (1.6%).
 - [April 14, 2026] Rotation invariant LoMa released. The model, which we call LoMa-R, is great at aerial imagery (e.g. [SatAst](https://github.com/georg-bn/satast)). See the paper [Who Handles Orientation?](https://arxiv.org/abs/2604.11809) (CVPRW26) for more information.
@@ -50,6 +52,19 @@ We provide additional code examples in [demo.py](demo.py), which might help in u
 uv run demo.py matcher:loma-b
 ```
 
+## Affine Correspondences
+An affine correspondence is a point match together with the local affine map (a 2x2 matrix) relating the neighbourhoods of the two points. AffineLoMa (`AffineLoMaB`, `AffineLoMaL`, `AffineLoMaG`) predicts it for every match, and the affine is a `(M, 2, 2)` array in pixels:
+```python
+from loma import LoMa, AffineLoMaB
+
+model = LoMa(AffineLoMaB())
+kptsA, kptsB, A = model.match(img_A_path, img_B_path, return_affine=True)
+```
+Evaluate the affine accuracy on HPatches with
+```bash
+uv run eval.py matcher:affine-loma-b --benchmark hpatches_affine
+```
+
 ## Setup/Install
 In your python environment (tested on Linux python 3.12), run:
 ```bash
@@ -75,15 +90,41 @@ Use `uv run eval.py --help` to explore the different options.
 The results are similar to those reported in the paper. For example, running the evaluation for LoMa-B on WxBS gives us `mAA_10px: 0.6876`.
 
 ## Sizes
-We an array of models: LoMA-{B, B128, L, G, R}. For most usecases LoMa-B, which is the same size as LightGlue, works fine. LoMa-G is significantly heavier but gives the most accurate matches, even surpassing the RoMa-family on e.g. WxBS and IMC22. LoMa-R provides a rotation invariant matcher and descriptor (through data augmentation).
+We an array of models: LoMA-{B, B64, B128, L, G, R}. For most usecases LoMa-B, which is the same size as LightGlue, works fine. LoMa-G is significantly heavier but gives the most accurate matches, even surpassing the RoMa-family on e.g. WxBS and IMC22. LoMa-R provides a rotation invariant matcher and descriptor (through data augmentation).
 
 ## Pretrained Weights
 The models should auto download as you initialize them. However, for those who prefer to directly download the weights we provide the links below.
 - **LoMa-B** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_B.pt)
+- **LoMa-B64** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_B64.pth)
 - **LoMa-B128** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_B128.pth)
 - **LoMa-L** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_L.pth)
 - **LoMa-G** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_G.pth)
 - **LoMa-R** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_R.pth)
+- **AffineLoMa-B** – [Download](https://github.com/davnords/storage/releases/download/affcorresps/affine_loma_B.pth)
+- **AffineLoMa-L** – [Download](https://github.com/davnords/storage/releases/download/affcorresps/affine_loma_L.pth)
+- **AffineLoMa-G** – [Download](https://github.com/davnords/storage/releases/download/affcorresps/affine_loma_G.pth)
+
+## Training
+
+### Data
+We initially provide a training script on MegaDepth. We use the same standard data pre-processing as in [RoMa](https://github.com/Parskatt/RoMa) and [DKM](https://github.com/parskatt/dkm). The easiest way to obtain the data is to follow the instructions in those repos. We expect the data to be in the `data/` folder. If stored elsewhere, symlink it to there.
+
+The full LoMa model is trained on: [ScanNet++](https://github.com/scannetpp/scannetpp), [BlendedMVS](https://github.com/yoyo000/blendedmvs), [Map-Free](https://github.com/nianticlabs/map-free-reloc), [Hypersim](https://github.com/apple/ml-hypersim), [MegaScenes](https://megascenes.github.io/), [MegaDepth](https://github.com/zhengqili/MegaDepth), [AerialMD](https://github.com/kvuong2711/aerial-megadepth), [TartanAir v2](https://tartanair.org/), [Mapillary Planet-scale](https://www.mapillary.com/dataset/depth), [Aria Synthetic Environments](https://www.projectaria.com/datasets/ase/), [CO3Dv2](https://github.com/facebookresearch/co3d), [MegaSynth](https://hwjiang1510.github.io/MegaSynth/), [SpatialVID](https://github.com/NJU-3DV/SpatialVID), [FlyingThings3D](https://lmb.informatik.uni-freiburg.de/resources/datasets/SceneFlowDatasets.en.html), [UnrealStereo4k](https://huggingface.co/datasets/fabiotosi92/UnrealStereo4K), and [Virtual KITTI 2](https://europe.naverlabs.com/proxy-virtual-worlds-vkitti-2/).
+
+### Start
+LoMa is trained in two stages: (i) descriptor and (ii) matcher. To finetune LoMa, only the matcher needs to be trained. To train LoMa from scratch you should first train the descriptor:
+```bash
+uv run torchrun --nproc_per_node=8 train/descriptor.py --name loma-desc
+```
+Thereafter, you train the matcher on-top of your already trained descriptor:
+```bash
+uv run torchrun --nproc_per_node=8 train/matcher.py --name loma-match --model.descriptor_run_path <path to your descriptor run>
+```
+You can use `--help` on the training scripts to find the customizable parameters. The defaults are what we used to train LoMa-B. The training scripts support distributed training (including multi-node). Non-distributed training also works, simply run `uv run train/<script.py>`. However, this will not reproduce our results.
+
+To train LoMa-R you can simply turn on rotation data augmentation by adding the flag `--transform.rot360`. To train other sizes of LoMa simply change the embed dimension and number of heads. We use a constant head dimension of 64 and embed dimensions of 256, 512, and 1024 for LoMa-B, LoMa-L, and LoMa-G, respectively.
+
+AffineLoMa adds an affine head on top of a pretrained, frozen LoMa. It is trained with the flags `--model.affine --model.weights_url <weights of the LoMa to extend> --loss.affine_loss_weight 1`.
 
 ## Checklist
 - [x] Publish the inference code.
@@ -92,8 +133,8 @@ The models should auto download as you initialize them. However, for those who p
 - [x] Integrate with [vismatch](https://github.com/gmberton/vismatch). See this [PR](https://github.com/gmberton/vismatch/pull/63).
 - [x] Provide training code.
 - [x] Release HardMatch.
-- [ ] Merge training code into main branch.
-- [ ] Release a lightweight descriptor.
+- [x] Merge training code into main branch.
+- [x] Release a lightweight descriptor.
 
 ## License
 All our code except the matcher, which inherits its license from LightGlue, is MIT license. LightGlue has an [Apache-2.0](https://github.com/cvg/LightGlue/blob/main/LICENSE) license.
@@ -116,5 +157,15 @@ If you find our models useful, please consider citing our papers!
   author={David Nordström and Johan Edstedt and Georg Bökman and Fredrik Kahl},
   booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
   year={2026}
+}
+
+@misc{nordstrom2026alomaaffinecorrespondencespatches,
+      title={ALoMa: Affine Correspondences Beyond Patches}, 
+      author={David Nordström and Georg Bökman and Viktor Larsson and Fredrik Kahl and Jonathan Ventura},
+      year={2026},
+      eprint={2611.18170},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2611.18170}, 
 }
 ```

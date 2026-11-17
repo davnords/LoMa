@@ -9,8 +9,8 @@ import torch.nn.functional as F
 import torchvision.models as tvm
 from PIL import Image
 
-from loma.device import device, amp_dtype
-from loma.types import Model
+from ..device import device, amp_dtype
+from ..types import Model, Batch
 
 logger = logging.getLogger(__name__)
 
@@ -65,11 +65,20 @@ class DeDoDeDescriptor(Model):
             f"Unexpected keys when loading pretrained weights: {unexpected_keys}"
         )
         return model
-
+    
     def forward(
         self,
-        images: torch.Tensor,
+        batch: Batch | torch.Tensor,
     ):
+        if isinstance(batch, Batch):
+            images = torch.cat((batch.img_A, batch.img_B), dim=0)
+        elif isinstance(batch, torch.Tensor):
+            images = batch
+        else:
+            raise TypeError(
+                "Expected Batch or torch.Tensor, "
+                f"got {type(batch)}"
+            )
         features, sizes = self.encoder(images)
         descriptions = 0
         context = None

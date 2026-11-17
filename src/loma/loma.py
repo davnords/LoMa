@@ -220,6 +220,42 @@ def filter_matches(scores: torch.Tensor, th: float):
     return m0, m1, mscores0, mscores1
 
 
+class AffineHead(nn.Module):
+    """Per-keypoint affine (scale, orientation, shape) from the matcher descriptors of both images."""
+
+    def __init__(self, dim: int, num_heads: int, n_layers: int = 3, max_log_scale: float = 2.0) -> None:
+        super().__init__()
+        self.max_log_scale = max_log_scale
+        self.transformer_layers = nn.ModuleList(
+            [TransformerLayer(dim, num_heads) for _ in range(n_layers)]
+        )
+        self.mlp = nn.Sequential(nn.Linear(dim, dim), nn.GELU(), nn.Linear(dim, 5))
+        nn.init.zeros_(self.mlp[-1].weight)
+        nn.init.zeros_(self.mlp[-1].bias)
+
+    def forward(self, desc0, desc1, encoding0, encoding1):
+        for layer in self.transformer_layers:
+            desc0, desc1 = layer(desc0, desc1, encoding0, encoding1)
+        return self._affine(desc0), self._affine(desc1)
+
+    def _affine(self, desc: torch.Tensor) -> torch.Tensor:
+        """(B, N, dim) -> (B, N, 2, 2), A = s R(c, sin) [[e^a, b], [0, e^-a]] with det(A) = s^2 > 0."""
+        with torch.autocast(device_type=desc.device.type, enabled=False):
+            log_s, p_c, p_s, a, b = self.mlp(desc.float()).unbind(-1)
+            s = torch.exp(self.max_log_scale * torch.tanh(log_s))
+            ea = torch.exp(self.max_log_scale * torch.tanh(a))
+            cx, sx = p_c + 1.0, p_s
+            norm = torch.rsqrt(cx * cx + sx * sx + 1e-12)
+            c, sin = cx * norm, sx * norm
+            return torch.stack(
+                [
+                    torch.stack([s * c * ea, s * (c * b - sin / ea)], -1),
+                    torch.stack([s * sin * ea, s * (sin * b + c / ea)], -1),
+                ],
+                -2,
+            )
+
+
 class LoMa(Model):
     @dataclass(frozen=True, kw_only=True)
     class Cfg:
@@ -230,6 +266,7 @@ class LoMa(Model):
         filter_threshold: float = 0.1
         mp: bool = True
         compile: bool = False
+        affine: bool = False
         descriptor: Literal["dedode_b", "dedode_g"] = "dedode_b"
         num_keypoints: int = 2048
         # Positional encoding config
@@ -279,6 +316,9 @@ class LoMa(Model):
         self.log_assignment = nn.ModuleList(
             [MatchAssignment(cfg.embed_dim) for _ in range(cfg.n_layers)]
         )
+
+        if cfg.affine:
+            self.affine_head = AffineHead(cfg.embed_dim, cfg.num_heads)
 
         self._detector = DaD(DaD.Cfg(compile=cfg.compile)).eval()
         for p in self._detector.parameters():
@@ -369,11 +409,11 @@ class LoMa(Model):
                 desc0, desc1 = self.transformers[i](desc0, desc1, encoding0, encoding1)
             scores, _ = self.log_assignment[i](desc0, desc1)
             assert scores is not None
+            out = {"scores": scores}
+            if self.cfg.affine:
+                out["affine_A"], out["affine_B"] = self.affine_head(desc0, desc1, encoding0, encoding1)
 
-        return {
-            "scores": scores,
-            # "all_scores": all_scores, # for training you need to return intermediate scores for layer-wise supervision
-        }
+        return out
 
     @torch.inference_mode()
     def detect_and_describe(
@@ -409,14 +449,16 @@ class LoMa(Model):
         image_B: str | torch.Tensor,
         filter_threshold: float | None = None,
         num_keypoints: int | None = None,
-    ) -> Tuple[np.ndarray, np.ndarray]:
+        return_affine: bool = False,
+    ) -> Tuple[np.ndarray, ...]:
         """Match keypoints between two images, returning pixel-coordinate matches.
 
         Args:
             image_A: Path to image A (str) or image tensor (B, C, H, W).
             image_B: Path to image B (str) or image tensor (B, C, H, W).
         Returns:
-            Tuple of (kptsA, kptsB) as numpy arrays of pixel coordinates.
+            Tuple of (kptsA, kptsB) as numpy arrays of pixel coordinates. With `return_affine` (requires `cfg.affine`), also the
+            (M, 2, 2) pixel-frame affine of each match, mapping a local neighbourhood in image A to image B.
         """
         keypoints_A, descriptors_A, h1, w1 = self.detect_and_describe(
             image_A, num_keypoints
@@ -428,16 +470,22 @@ class LoMa(Model):
         if filter_threshold is None:
             filter_threshold = self.cfg.filter_threshold
 
-        scores = self(keypoints_A, keypoints_B, descriptors_A, descriptors_B)["scores"]
-        m0, _, _, _ = filter_matches(scores, filter_threshold)
+        out = self(keypoints_A, keypoints_B, descriptors_A, descriptors_B)
+        m0, _, _, _ = filter_matches(out["scores"], filter_threshold)
 
         valid = m0[0] > -1
-        matched_A = keypoints_A[0][torch.where(valid)[0]]
-        matched_B = keypoints_B[0][m0[0][valid]]
+        i, j = torch.where(valid)[0], m0[0][valid]
+        matches = (
+            to_pixel_coords(keypoints_A[0][i], h1, w1).cpu().numpy(),
+            to_pixel_coords(keypoints_B[0][j], h2, w2).cpu().numpy(),
+        )
+        if not return_affine:
+            return matches
 
-        return to_pixel_coords(matched_A, h1, w1).cpu().numpy(), to_pixel_coords(
-            matched_B, h2, w2
-        ).cpu().numpy()
+        A = out["affine_B"][0][j] @ torch.linalg.inv(out["affine_A"][0][i])
+        s_A = torch.tensor([w1, h1], device=A.device) / 2
+        s_B = torch.tensor([w2, h2], device=A.device) / 2
+        return (*matches, (A * (s_B[:, None] / s_A[None, :])).cpu().numpy())
 
 
 @dataclass(frozen=True, kw_only=True)
@@ -497,5 +545,32 @@ class LoMaR(LoMa.Cfg):
     weights_url: str = (
         "https://github.com/davnords/storage/releases/download/loma/loma_R.pth"
     )
+
+@dataclass(frozen=True, kw_only=True)
+class AffineLoMaB(LoMaB):
+    name: Literal["affine_loma_B"] = "affine_loma_B"
+    affine: Literal[True] = True
+    weights_url: str = (
+        "https://github.com/davnords/storage/releases/download/affcorresps/affine_loma_B.pth"
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class AffineLoMaL(LoMaL):
+    name: Literal["affine_loma_L"] = "affine_loma_L"
+    affine: Literal[True] = True
+    weights_url: str = (
+        "https://github.com/davnords/storage/releases/download/affcorresps/affine_loma_L.pth"
+    )
+
+
+@dataclass(frozen=True, kw_only=True)
+class AffineLoMaG(LoMaG):
+    name: Literal["affine_loma_G"] = "affine_loma_G"
+    affine: Literal[True] = True
+    weights_url: str = (
+        "https://github.com/davnords/storage/releases/download/affcorresps/affine_loma_G.pth"
+    )
+
 
 LoMaName = Literal["loma_B128", "loma_B", "loma_L", "loma_G", "loma_R"]
