@@ -48,13 +48,22 @@ F, mask = cv2.findFundamentalMat(
     kptsA, kptsB, ransacReprojThreshold=0.2, method=cv2.USAC_MAGSAC, confidence=0.999999, maxIters=10000
 )
 ```
-AffineLoMa (`AffineLoMaB`, `AffineLoMaL`, `AffineLoMaG`) also predicts a local affine transformation for each match, given as a `(M, 2, 2)` array in pixels:
-```python
-kptsA, kptsB, A = model.match(img_A_path, img_B_path, return_affine=True)
-```
 We provide additional code examples in [demo.py](demo.py), which might help in understanding. To run the demo, use the following API:
 ```bash
 uv run demo.py matcher:loma-b
+```
+
+## Affine Correspondences
+An affine correspondence is a point match together with the local affine map (a 2x2 matrix) relating the neighbourhoods of the two points. AffineLoMa (`AffineLoMaB`, `AffineLoMaL`, `AffineLoMaG`) predicts it for every match, and the affine is a `(M, 2, 2)` array in pixels:
+```python
+from loma import LoMa, AffineLoMaB
+
+model = LoMa(AffineLoMaB())
+kptsA, kptsB, A = model.match(img_A_path, img_B_path, return_affine=True)
+```
+Evaluate the affine accuracy on HPatches with
+```bash
+uv run eval.py matcher:affine-loma-b --benchmark hpatches_affine
 ```
 
 ## Setup/Install
@@ -76,7 +85,7 @@ To run a benchmark you need to install the optional dependencies by e.g. `uv syn
 ```bash
 uv run eval.py matcher:loma-b --benchmark wxbs
 ```
-Affine accuracy on HPatches is evaluated with `uv run eval.py matcher:affine-loma-b --benchmark hpatches_affine`. Use `uv run eval.py --help` to explore the different options. 
+Use `uv run eval.py --help` to explore the different options. 
 
 ### Expected Results
 The results are similar to those reported in the paper. For example, running the evaluation for LoMa-B on WxBS gives us `mAA_10px: 0.6876`.
@@ -92,6 +101,9 @@ The models should auto download as you initialize them. However, for those who p
 - **LoMa-L** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_L.pth)
 - **LoMa-G** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_G.pth)
 - **LoMa-R** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_R.pth)
+- **AffineLoMa-B** – [Download](https://github.com/davnords/storage/releases/download/affcorresps/affine_loma_B.pth)
+- **AffineLoMa-L** – [Download](https://github.com/davnords/storage/releases/download/affcorresps/affine_loma_L.pth)
+- **AffineLoMa-G** – [Download](https://github.com/davnords/storage/releases/download/affcorresps/affine_loma_G.pth)
 
 ## Training
 
