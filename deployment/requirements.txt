@@ -1,0 +1,13 @@
+# Python deps for the LoMa ONNX export + benchmark scripts.
+# These scripts ALSO require the LoMa package itself (provides `loma`):
+#   pip install "lomatch @ git+https://github.com/davnords/LoMa.git"
+torch
+torchvision
+onnx
+onnxruntime         # CPU EP; for aarch64/Blackwell GPU build from source (see README)
+onnxscript
+opencv-python
+pillow
+einops
+numpy
+matplotlib
