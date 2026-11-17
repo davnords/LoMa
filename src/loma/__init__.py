@@ -5,4 +5,7 @@ from .loma import (
     LoMaG as LoMaG,
     LoMaR as LoMaR,
     LoMaB128 as LoMaB128,
+    AffineLoMaB as AffineLoMaB,
+    AffineLoMaL as AffineLoMaL,
+    AffineLoMaG as AffineLoMaG,
 )

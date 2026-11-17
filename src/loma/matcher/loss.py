@@ -5,7 +5,11 @@ import torch.nn as nn
 from torch.nn.parallel import DistributedDataParallel
 import torch.nn.functional as F
 
-from loma.geometry import compute_sparse_mnn_matches
+from loma.geometry import (
+    compute_gt_warp_from_batch,
+    compute_sparse_mnn_matches,
+    gt_affine_at_matches,
+)
 from loma.loma import LoMa
 from loma.types import Batch
 
@@ -20,6 +24,9 @@ class GlueLoss(nn.Module):
         local_neighbourhood_size: int = 1
         # Loss weights for intermediate layers
         layer_loss_weight: float = 1.0
+        # Affine LoMa: weight of the Charbonnier loss on the relative affine of each match (0 = no affine loss)
+        affine_loss_weight: float = 0.0
+        charbonnier_eps: float = 1e-3
 
     def __init__(self, cfg: Cfg) -> None:
         super().__init__()
@@ -42,6 +49,14 @@ class GlueLoss(nn.Module):
         )["descriptions"].chunk(2)
 
         # Compute ground truth matches
+        gt_AB = None
+        if self.cfg.affine_loss_weight > 0:
+            gt_AB = compute_gt_warp_from_batch(
+                batch,
+                depth_error_threshold=self.cfg.depth_error_threshold,
+                flow_error_threshold=self.cfg.flow_error_threshold,
+                local_neighbourhood_size=self.cfg.local_neighbourhood_size,
+            )
         mnn = compute_sparse_mnn_matches(
             detector_kpts_A,
             detector_kpts_B,
@@ -50,6 +65,7 @@ class GlueLoss(nn.Module):
             flow_error_threshold=self.cfg.flow_error_threshold,
             local_neighbourhood_size=self.cfg.local_neighbourhood_size,
             error_threshold=self.cfg.error_threshold,
+            gt_AB=gt_AB,
         )
 
         # Run LoMa (trainable)
@@ -59,6 +75,8 @@ class GlueLoss(nn.Module):
         if mnn.numel() == 0:
             # No valid matches found - return zero loss
             dummy_loss = sum((0 * s).mean() for s in all_scores)
+            if gt_AB is not None:
+                dummy_loss = dummy_loss + 0 * (result["affine_A"].sum() + result["affine_B"].sum())
             return dummy_loss, None
 
         # Compute loss over all layers (intermediate supervision)
@@ -96,5 +114,14 @@ class GlueLoss(nn.Module):
 
         # Average over layers
         total_loss = total_loss / n_layers
+
+        if gt_AB is not None:
+            gt_affine, valid = gt_affine_at_matches(gt_AB, detector_kpts_A, mnn)
+            A_A = result["affine_A"][mnn[:, 0], mnn[:, 1]]
+            A_B = result["affine_B"][mnn[:, 0], mnn[:, 2]]
+            r2 = ((A_B @ torch.linalg.inv(A_A) - gt_affine) ** 2).sum((-2, -1))
+            eps = self.cfg.charbonnier_eps
+            affine_loss = (torch.sqrt(r2 + eps**2) - eps)[valid].sum() / valid.sum().clamp(min=1)
+            total_loss = total_loss + self.cfg.affine_loss_weight * affine_loss
 
         return total_loss, None

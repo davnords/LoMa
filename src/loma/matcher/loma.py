@@ -11,6 +11,7 @@ from torch.utils.checkpoint import checkpoint
 from ..device import device
 from ..types import Batch, Model
 from ..detector.dad import DaD
+from ..loma import AffineHead
 
 logger = logging.getLogger(__name__)
 
@@ -236,6 +237,9 @@ class LoMa(Model):
         # Descriptor config (frozen, used for detect/describe)
         descriptor: Literal["dedode_b", "dedode_g"] = "dedode_g"
         descriptor_run_path: str | None = None
+        # Affine LoMa: add an affine head on top of a pretrained, frozen LoMa (`weights_url`)
+        affine: bool = False
+        weights_url: str | None = None
         num_keypoints: int = 2048
         # Positional encoding config
         posenc_type: Literal["learnable", "fixed", "none"] = "learnable"
@@ -270,6 +274,9 @@ class LoMa(Model):
             [MatchAssignment(cfg.descriptor_dim) for _ in range(cfg.n_layers)]
         )
 
+        if cfg.affine:
+            self.affine_head = AffineHead(cfg.descriptor_dim, cfg.num_heads)
+
         self._detector = DaD()
         self._detector.eval()
         for p in self._detector.parameters():
@@ -279,6 +286,14 @@ class LoMa(Model):
         self._descriptor.eval()
         for p in self._descriptor.parameters():
             p.requires_grad = False
+
+        if cfg.weights_url is not None:
+            weights = torch.hub.load_state_dict_from_url(cfg.weights_url, map_location="cpu")
+            missing, unexpected = self.load_state_dict(weights, strict=False)
+            assert not unexpected and all(k.startswith("affine_head") for k in missing), (missing, unexpected)
+        if cfg.affine:
+            for name, p in self.named_parameters():
+                p.requires_grad = name.startswith("affine_head")
 
         self.to(device)
         if cfg.compile:
@@ -360,10 +375,13 @@ class LoMa(Model):
             scores, _ = self.log_assignment[i](desc0, desc1)
             all_scores.append(scores)
 
-        return {
+        out = {
             "scores": all_scores[-1],
             "all_scores": all_scores,
         }
+        if self.cfg.affine:
+            out["affine_A"], out["affine_B"] = self.affine_head(desc0, desc1, encoding0, encoding1)
+        return out
 
     @torch.inference_mode()
     def match(

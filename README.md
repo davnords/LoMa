@@ -48,6 +48,10 @@ F, mask = cv2.findFundamentalMat(
     kptsA, kptsB, ransacReprojThreshold=0.2, method=cv2.USAC_MAGSAC, confidence=0.999999, maxIters=10000
 )
 ```
+AffineLoMa (`AffineLoMaB`, `AffineLoMaL`, `AffineLoMaG`) also predicts a local affine transformation for each match, given as a `(M, 2, 2)` array in pixels:
+```python
+kptsA, kptsB, A = model.match(img_A_path, img_B_path, return_affine=True)
+```
 We provide additional code examples in [demo.py](demo.py), which might help in understanding. To run the demo, use the following API:
 ```bash
 uv run demo.py matcher:loma-b
@@ -72,7 +76,7 @@ To run a benchmark you need to install the optional dependencies by e.g. `uv syn
 ```bash
 uv run eval.py matcher:loma-b --benchmark wxbs
 ```
-Use `uv run eval.py --help` to explore the different options. 
+Affine accuracy on HPatches is evaluated with `uv run eval.py matcher:affine-loma-b --benchmark hpatches_affine`. Use `uv run eval.py --help` to explore the different options. 
 
 ### Expected Results
 The results are similar to those reported in the paper. For example, running the evaluation for LoMa-B on WxBS gives us `mAA_10px: 0.6876`.
@@ -107,6 +111,8 @@ uv run torchrun --nproc_per_node=8 train/matcher.py --name loma-match --model.de
 You can use `--help` on the training scripts to find the customizable parameters. The defaults are what we used to train LoMa-B. The training scripts support distributed training (including multi-node). Non-distributed training also works, simply run `uv run train/<script.py>`. However, this will not reproduce our results.
 
 To train LoMa-R you can simply turn on rotation data augmentation by adding the flag `--transform.rot360`. To train other sizes of LoMa simply change the embed dimension and number of heads. We use a constant head dimension of 64 and embed dimensions of 256, 512, and 1024 for LoMa-B, LoMa-L, and LoMa-G, respectively.
+
+AffineLoMa adds an affine head on top of a pretrained, frozen LoMa. It is trained with the flags `--model.affine --model.weights_url <weights of the LoMa to extend> --loss.affine_loss_weight 1`.
 
 ## Checklist
 - [x] Publish the inference code.
