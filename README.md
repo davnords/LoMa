@@ -21,8 +21,7 @@
 LoMa is a fast and accurate family of local feature matchers. It works similar to [LightGlue](https://github.com/cvg/LightGlue) but significantly improves matching robustness and accuracy across benchmarks, even outperforming [RoMa](https://github.com/Parskatt/RoMa) and [RoMa v2](https://github.com/Parskatt/RoMaV2) on the difficult [WxBS](https://arxiv.org/abs/1504.06603) benchmark. As LoMa leverages local keypoint descriptions, the models are perfect drop-in replacement in e.g. SfM and Visual Localization pipelines.
 
 ## Updates
-- [November 17, 2026] We have extended LoMa to also predict affine correspondences, see the [paper](https://arxiv.org/abs/2611.18170v1).
-- [November 17, 2026] LoMaB64, using a faster and smaller descriptor, has been released.
+- [November 17, 2026] We have extended LoMa to also predict affine correspondences, see the [paper](https://arxiv.org/abs/2611.18170v1), and released LoMaB64, using a faster and smaller descriptor.
 - [October 22, 2026] Thanks to a contribution by [TheGhoul21](https://github.com/TheGhoul21), LoMa is now faster for old PyTorch versions.
 - [September 26] Weights trained on only commercially licensed datasets have been released, find them [here](https://github.com/davnords/storage/releases/tag/loma).
 - [June 27, 2026] An initial public release of HardMatch can be found [here](https://github.com/davnords/HardMatch).
