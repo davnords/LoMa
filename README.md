@@ -17,14 +17,14 @@
     <em>Performance on a difficult matching pair compared to LightGlue.</em>
 </p>
 
-# ⚠️ WARNING: This branch is under development. Use at your own discretion.
-Disclaimer: Training reproduction has not been validated but the code closely follows the original training code. To be cleaned up futher.
-
 ## Overview
 LoMa is a fast and accurate family of local feature matchers. It works similar to [LightGlue](https://github.com/cvg/LightGlue) but significantly improves matching robustness and accuracy across benchmarks, even outperforming [RoMa](https://github.com/Parskatt/RoMa) and [RoMa v2](https://github.com/Parskatt/RoMaV2) on the difficult [WxBS](https://arxiv.org/abs/1504.06603) benchmark. As LoMa leverages local keypoint descriptions, the models are perfect drop-in replacement in e.g. SfM and Visual Localization pipelines.
 
 ## Updates
+- [November 17, 2026] We have extended LoMa to also predict affine correspondences, see the [paper](https://arxiv.org/abs/2611.18170v1).
+- [November 17, 2026] LoMaB64, using a faster and smaller descriptor, has been released.
 - [October 22, 2026] Thanks to a contribution by [TheGhoul21](https://github.com/TheGhoul21), LoMa is now faster for old PyTorch versions.
+- [September 26] Weights trained on only commercially licensed datasets have been released, find them [here](https://github.com/davnords/storage/releases/tag/loma).
 - [June 27, 2026] An initial public release of HardMatch can be found [here](https://github.com/davnords/HardMatch).
 - [June 18, 2026] LoMa has been accepted to ECCV 2026 in Malmö as an Oral paper (1.6%).
 - [April 14, 2026] Rotation invariant LoMa released. The model, which we call LoMa-R, is great at aerial imagery (e.g. [SatAst](https://github.com/georg-bn/satast)). See the paper [Who Handles Orientation?](https://arxiv.org/abs/2604.11809) (CVPRW26) for more information.
@@ -82,11 +82,12 @@ Affine accuracy on HPatches is evaluated with `uv run eval.py matcher:affine-lom
 The results are similar to those reported in the paper. For example, running the evaluation for LoMa-B on WxBS gives us `mAA_10px: 0.6876`.
 
 ## Sizes
-We an array of models: LoMA-{B, B128, L, G, R}. For most usecases LoMa-B, which is the same size as LightGlue, works fine. LoMa-G is significantly heavier but gives the most accurate matches, even surpassing the RoMa-family on e.g. WxBS and IMC22. LoMa-R provides a rotation invariant matcher and descriptor (through data augmentation).
+We an array of models: LoMA-{B, B64, B128, L, G, R}. For most usecases LoMa-B, which is the same size as LightGlue, works fine. LoMa-G is significantly heavier but gives the most accurate matches, even surpassing the RoMa-family on e.g. WxBS and IMC22. LoMa-R provides a rotation invariant matcher and descriptor (through data augmentation).
 
 ## Pretrained Weights
 The models should auto download as you initialize them. However, for those who prefer to directly download the weights we provide the links below.
 - **LoMa-B** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_B.pt)
+- **LoMa-B64** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_B64.pth)
 - **LoMa-B128** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_B128.pth)
 - **LoMa-L** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_L.pth)
 - **LoMa-G** – [Download](https://github.com/davnords/storage/releases/download/loma/loma_G.pth)
@@ -121,8 +122,8 @@ AffineLoMa adds an affine head on top of a pretrained, frozen LoMa. It is traine
 - [x] Integrate with [vismatch](https://github.com/gmberton/vismatch). See this [PR](https://github.com/gmberton/vismatch/pull/63).
 - [x] Provide training code.
 - [x] Release HardMatch.
-- [ ] Merge training code into main branch.
-- [ ] Release a lightweight descriptor.
+- [x] Merge training code into main branch.
+- [x] Release a lightweight descriptor.
 
 ## License
 All our code except the matcher, which inherits its license from LightGlue, is MIT license. LightGlue has an [Apache-2.0](https://github.com/cvg/LightGlue/blob/main/LICENSE) license.
@@ -145,5 +146,15 @@ If you find our models useful, please consider citing our papers!
   author={David Nordström and Johan Edstedt and Georg Bökman and Fredrik Kahl},
   booktitle={Proceedings of the IEEE/CVF Conference on Computer Vision and Pattern Recognition (CVPR) Workshops},
   year={2026}
+}
+
+@misc{nordstrom2026alomaaffinecorrespondencespatches,
+      title={ALoMa: Affine Correspondences Beyond Patches}, 
+      author={David Nordström and Georg Bökman and Viktor Larsson and Fredrik Kahl and Jonathan Ventura},
+      year={2026},
+      eprint={2611.18170},
+      archivePrefix={arXiv},
+      primaryClass={cs.CV},
+      url={https://arxiv.org/abs/2611.18170}, 
 }
 ```
